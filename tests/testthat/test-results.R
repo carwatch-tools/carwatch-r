@@ -242,6 +242,29 @@ test_that("a collection-date mapping reassigns scans by sample position", {
   expect_identical(samples$barcode[samples$day == "D2" & samples$sample == "t2"], "002")
 })
 
+test_that("protocol order follows observed registration precedence", {
+  timezone <- "Europe/Berlin"
+  raw <- tibble::tibble(
+    participant = c("vp01", "vp01", "vp02", "vp02", "vp02", "vp02"),
+    timestamp = as.POSIXct(c("2025-05-15 05:00:00", "2025-05-15 06:00:00", "2025-05-16 05:00:00", "2025-05-16 06:00:00", "2025-05-17 05:00:00", "2025-05-17 06:00:00"), tz = timezone),
+    action = c("study_metadata", "barcode_scanned", "study_metadata", "barcode_scanned", "study_metadata", "barcode_scanned"),
+    payload = list(
+      list(study_name = "second", saliva_ids = "b", saliva_times = 0, study_days = 1),
+      list(sample_expected = "b", sample_scanned = "b", barcode_value = "b-01", day_expected = 1, day_scanned = 1),
+      list(study_name = "first", saliva_ids = "a", saliva_times = 0, study_days = 1),
+      list(sample_expected = "a", sample_scanned = "a", barcode_value = "a-01", day_expected = 1, day_scanned = 1),
+      list(study_name = "second", saliva_ids = "b", saliva_times = 0, study_days = 1),
+      list(sample_expected = "b", sample_scanned = "b", barcode_value = "b-02", day_expected = 1, day_scanned = 1)
+    ),
+    source_file = rep("one.csv", 6)
+  )
+  converted <- convert_raw_logs(raw, errors = "warn", create_report = TRUE)
+  schedule <- extract_registration_schedule(raw)
+  expect_identical(schedule$study_name[match("D1", schedule$day)], "first")
+  samples <- as_sample_events(converted$results)
+  expect_identical(samples$day[samples$participant == "vp01" & samples$sample == "b" & samples$barcode == "b-01"], "D2")
+})
+
 test_that("a change decision sorts a complete scan series by time", {
   timezone <- "Europe/Berlin"
   raw <- tibble::tibble(

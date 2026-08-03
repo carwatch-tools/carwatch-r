@@ -46,13 +46,51 @@
   if (!is.null(protocol_manifest)) {
     configs <- lapply(protocol_manifest, .registration_config)
     if (any(vapply(configs, is.null, logical(1)))) .carwatch_abort("Every protocol manifest entry requires non-empty `saliva_ids`.", "carwatch_schema_error")
+    keys <- vapply(configs, .registration_key, character(1))
+    if (anyDuplicated(keys)) .carwatch_abort("Protocol manifest contains duplicate registration configurations.", "carwatch_schema_error")
+    metadata <- raw_logs[raw_logs$action == "study_metadata", , drop = FALSE]
+    observed <- lapply(metadata$payload, .registration_config)
+    observed <- observed[!vapply(observed, is.null, logical(1))]
+    unknown <- setdiff(vapply(observed, .registration_key, character(1)), keys)
+    if (length(unknown)) .carwatch_abort("Raw logs contain registration configurations not present in the protocol manifest.", "carwatch_schema_error")
     return(configs)
   }
   metadata <- raw_logs[raw_logs$action == "study_metadata", , drop = FALSE]
   configs <- lapply(metadata$payload, .registration_config)
   configs <- configs[!vapply(configs, is.null, logical(1))]
   if (!length(configs)) .carwatch_abort("Raw-log conversion requires usable `study_metadata` registration events.", "carwatch_schema_error")
-  keys <- vapply(configs, .registration_key, character(1)); configs[!duplicated(keys)]
+  keys <- vapply(configs, .registration_key, character(1))
+  config_by_key <- configs[!duplicated(keys)]
+  names(config_by_key) <- keys[!duplicated(keys)]
+  observed <- dplyr::arrange(metadata, .data$participant, .data$timestamp, .data$source_file)
+  observed$config_key <- vapply(observed$payload, function(payload) {
+    config <- .registration_config(payload)
+    if (is.null(config)) NA_character_ else .registration_key(config)
+  }, character(1))
+  sequences <- lapply(split(observed$config_key, observed$participant, drop = TRUE), function(values) unique(values[!is.na(values)]))
+  first_seen <- vapply(names(config_by_key), function(key) min(observed$timestamp[observed$config_key == key]), as.POSIXct(NA))
+  position <- lapply(names(config_by_key), function(key) unlist(lapply(sequences, function(sequence) match(key, sequence)), use.names = FALSE))
+  names(position) <- names(config_by_key)
+  precedes <- matrix(0L, nrow = length(config_by_key), ncol = length(config_by_key), dimnames = list(names(config_by_key), names(config_by_key)))
+  for (sequence in sequences) if (length(sequence) > 1L) for (left in seq_along(sequence)) if (left < length(sequence)) for (right in (left + 1L):length(sequence)) precedes[sequence[[left]], sequence[[right]]] <- precedes[sequence[[left]], sequence[[right]]] + 1L
+  edges <- matrix(FALSE, nrow = length(config_by_key), ncol = length(config_by_key), dimnames = dimnames(precedes))
+  for (left in seq_len(nrow(precedes))) for (right in seq_len(ncol(precedes))) if (left != right && precedes[left, right] > precedes[right, left]) edges[left, right] <- TRUE
+  sort_key <- function(key) {
+    positions <- position[[key]]
+    c(if (length(positions)) stats::median(positions, na.rm = TRUE) else Inf, as.numeric(first_seen[[key]]), match(key, names(config_by_key)))
+  }
+  remaining <- names(config_by_key)
+  ordered <- character()
+  while (length(remaining)) {
+    incoming <- vapply(remaining, function(key) any(edges[remaining, key, drop = TRUE]), logical(1))
+    available <- remaining[!incoming]
+    if (!length(available)) available <- remaining
+    sort_matrix <- vapply(available, sort_key, numeric(3))
+    candidate <- available[[order(sort_matrix[1, ], sort_matrix[2, ], sort_matrix[3, ])[1L]]]
+    ordered <- c(ordered, candidate)
+    remaining <- setdiff(remaining, candidate)
+  }
+  unname(config_by_key[ordered])
 }
 
 .registration_schedule <- function(raw_logs, protocol_manifest = NULL) {
