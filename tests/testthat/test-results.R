@@ -83,3 +83,31 @@ test_that("accept applies a proposed sample drop", {
   final <- convert_raw_logs(raw, errors = "warn", create_report = TRUE, issue_decisions = initial$report$issues)
   expect_equal(nrow(as_sample_events(final$results)), 0L)
 })
+
+test_that("a change decision sorts a complete scan series by time", {
+  timezone <- "Europe/Berlin"
+  raw <- tibble::tibble(
+    participant = rep("vp01", 6),
+    timestamp = as.POSIXct(c("2025-05-15 05:00:00", "2025-05-15 06:00:00", "2025-05-15 06:10:00", "2025-05-15 06:20:00", "2025-05-15 06:30:00", "2025-05-15 06:40:00"), tz = timezone),
+    action = c("study_metadata", "spontaneous_awakening", rep("barcode_scanned", 4)),
+    payload = list(
+      list(study_name = "study", saliva_ids = c("s1", "s2", "s3", "s4"), saliva_times = c(0, 30, 45, 60), study_days = 1),
+      list(id = 0),
+      list(sample_expected = "s2", sample_scanned = "s2", barcode_value = "002", day_expected = 1, day_scanned = 1),
+      list(sample_expected = "s3", sample_scanned = "s3", barcode_value = "003", day_expected = 1, day_scanned = 1),
+      list(sample_expected = "s4", sample_scanned = "s4", barcode_value = "004", day_expected = 1, day_scanned = 1),
+      list(sample_expected = "s1", sample_scanned = "s1", barcode_value = "001", day_expected = 1, day_scanned = 1)
+    ),
+    source_file = rep("one.csv", 6)
+  )
+  initial <- convert_raw_logs(raw, errors = "warn", create_report = TRUE)
+  decisions <- initial$report$issues
+  decisions$user_decision[decisions$code == "non_increasing_sampling_times"] <- "change"
+  decisions$user_decision_value[decisions$code == "non_increasing_sampling_times"] <- "sort_samples_by_time"
+  final <- convert_raw_logs(raw, errors = "raise", create_report = TRUE, issue_decisions = decisions)
+  samples <- as_sample_events(final$results)
+  expect_true(all(diff(as.numeric(samples$sampling_time)) > 0))
+  expect_equal(samples$barcode, c("002", "003", "004", "001"))
+  expect_equal(samples$recorded_sample, c("s2", "s3", "s4", "s1"))
+  expect_identical(final$report$issues$resolution_status[final$report$issues$code == "non_increasing_sampling_times"], "resolved")
+})

@@ -152,6 +152,50 @@ summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("e
   awakening + offsets * 60
 }
 
+.sort_sample_events_by_time <- function(long, schedule, participant, day) {
+  positions <- schedule[schedule$day == day, , drop = FALSE]
+  positions <- positions[order(positions$sample_position), , drop = FALSE]
+  expected_samples <- as.character(positions$scheduled_sample)
+  sampling_rows <- long[
+    long$participant == participant & long$day == day &
+      long$sample %in% expected_samples & long$variable == "sampling_time",
+    , drop = FALSE
+  ]
+  sampling_rows <- sampling_rows[match(expected_samples, sampling_rows$sample), , drop = FALSE]
+  times <- suppressWarnings(as.numeric(as.POSIXct(do.call(c, sampling_rows$value))))
+  complete <- nrow(sampling_rows) == length(expected_samples) &&
+    !anyNA(match(expected_samples, sampling_rows$sample)) && !anyNA(times)
+  if (!complete) {
+    .carwatch_abort(
+      sprintf(
+        "Cannot sort scan events by time because the sampling series is incomplete: participant=%s, day=%s, expected_sample_positions=%s, recorded_sample_positions=%s.",
+        shQuote(participant), shQuote(day),
+        paste(positions$sample_position, collapse = ","),
+        paste(positions$sample_position[!is.na(times)], collapse = ",")
+      ),
+      "carwatch_value_error"
+    )
+  }
+  source_order <- order(times, method = "radix")
+  if (any(diff(times[source_order]) <= 0)) {
+    .carwatch_abort(
+      sprintf("Sorting scan events by time did not create a strictly increasing sampling series: participant=%s, day=%s.", shQuote(participant), shQuote(day)),
+      "carwatch_value_error"
+    )
+  }
+  event_variables <- c("sampling_time", "barcode", "recorded_sample", "sampling_time_source", "day_expected", "day_scanned")
+  for (variable in event_variables) {
+    rows <- which(
+      long$participant == participant & long$day == day &
+        long$sample %in% expected_samples & long$variable == variable
+    )
+    target_rows <- rows[match(expected_samples, long$sample[rows])]
+    if (anyNA(target_rows)) next
+    long$value[target_rows] <- long$value[target_rows[source_order]]
+  }
+  long
+}
+
 .apply_conversion_patches <- function(long, report, schedule, manual_diary, sampling_schedule, timezone) {
   selected <- .decision_rows(report)
   if (!nrow(selected)) return(long)
@@ -171,6 +215,9 @@ summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("e
       long <- .replace_long_value(long, participant, day, sample, "sampling_time", timestamp)
       long <- .replace_long_value(long, participant, day, sample, "sampling_time_source", if (action == "change" && value == "use_default") "schedule" else "manual_diary")
     }
+    if (item$code[[1]] == "non_increasing_sampling_times" && action == "change") {
+      long <- .sort_sample_events_by_time(long, schedule, participant, day)
+    }
   }
   long
 }
@@ -182,7 +229,7 @@ summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("e
   if (!nrow(samples)) return(long)
   samples$scheduled_sample <- samples$sample
   samples <- .evaluate_sampling_compliance(samples, checker)
-  additions <- lapply(c("actual_interval_min", "time_deviation_min", "sample_compliant"), function(variable) tibble::tibble(participant = samples$participant, day = samples$day, sample = samples$sample, variable = variable, value = as.list(samples[[variable]])))
+  additions <- lapply(c("actual_interval_min", "time_deviation_min", "sample_compliant"), function(current_variable) tibble::tibble(participant = samples$participant, day = samples$day, sample = samples$sample, variable = current_variable, value = as.list(samples[[current_variable]])))
   day_values <- lapply(split(samples, interaction(samples$participant, samples$day, drop = TRUE)), function(group) {
     failed <- group$sample[group$sample_compliant %in% FALSE]
     tibble::tibble(participant = group$participant[[1]], day = group$day[[1]], sample = "day", variable = c("expected_sample_count", "recorded_sample_count", "assessed_sample_count", "compliant_sample_count", "non_compliant_samples", "day_compliant"), value = list(nrow(group), sum(!is.na(group$recorded_sample)), sum(!is.na(group$sample_compliant)), sum(group$sample_compliant %in% TRUE), if (length(failed)) paste(failed, collapse = ";") else NA_character_, all(group$sample_compliant %in% TRUE) && !anyNA(group$sample_compliant)))

@@ -58,6 +58,8 @@
   if (any(unsupported_change)) .carwatch_abort("change is not supported for one or more issue codes.", "carwatch_value_error")
   invalid_default <- change & frame$user_decision_value == "use_default" & frame$code != "missing_scheduled_sample_event"
   if (any(invalid_default)) .carwatch_abort("use_default is only valid for missing scheduled sample events.", "carwatch_value_error")
+  invalid_sort <- change & frame$code == "non_increasing_sampling_times" & frame$user_decision_value != "sort_samples_by_time"
+  if (any(invalid_sort)) .carwatch_abort("non-increasing sampling times only support `change` with `sort_samples_by_time`.", "carwatch_value_error")
   frame
 }
 
