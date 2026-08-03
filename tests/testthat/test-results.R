@@ -165,6 +165,29 @@ test_that("collection-date decisions choose the canonical day date", {
   expect_identical(format(scheduled, "%Y-%m-%d %H:%M"), c("2025-05-16 07:00", "2025-05-16 08:00"))
 })
 
+test_that("an explicit awakening-time decision does not require a diary", {
+  timezone <- "Europe/Berlin"
+  raw <- tibble::tibble(
+    participant = c("vp01", "vp01"),
+    timestamp = as.POSIXct(c("2025-05-15 05:00:00", "2025-05-15 06:20:00"), tz = timezone),
+    action = c("study_metadata", "barcode_scanned"),
+    payload = list(
+      list(study_name = "study", saliva_ids = "s1", saliva_times = 0, study_days = 1),
+      list(sample_expected = "s1", sample_scanned = "s1", barcode_value = "001", day_expected = 1, day_scanned = 1)
+    ),
+    source_file = c("one.csv", "one.csv")
+  )
+  initial <- convert_raw_logs(raw, errors = "warn", create_report = TRUE)
+  decisions <- initial$report$issues
+  awakening <- decisions$code == "missing_awakening_time"
+  decisions$user_decision[awakening] <- "change"
+  decisions$user_decision_value[awakening] <- "2025-05-15 06:00"
+  final <- convert_raw_logs(raw, errors = "raise", create_report = TRUE, issue_decisions = decisions)
+  days <- as_study_days(final$results)
+  expect_identical(format(days$awakening_time[[1]], "%Y-%m-%d %H:%M"), "2025-05-15 06:00")
+  expect_identical(days$awakening_type[[1]], "decision")
+})
+
 test_that("a change decision sorts a complete scan series by time", {
   timezone <- "Europe/Berlin"
   raw <- tibble::tibble(

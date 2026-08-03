@@ -310,11 +310,16 @@ summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("e
     item <- selected[index, , drop = FALSE]
     participant <- item$participant[[1]]; day <- item$day[[1]]; sample <- item$sample_id[[1]]
     action <- item$user_decision[[1]]; value <- item$user_decision_value[[1]]
-    if (item$code[[1]] == "missing_awakening_time" && ((action == "accept" && item$proposed_action[[1]] == "use_manual_diary_awakening_time") || (action == "change" && value %in% c("use_manual_diary_awakening_time", "manual_diary")))) {
-      timestamp <- .manual_timestamp(manual_diary, participant, day, "awakening_time", timezone)
+    awakening_patch <- item$code[[1]] == "missing_awakening_time" && (
+      (action == "accept" && item$proposed_action[[1]] == "use_manual_diary_awakening_time") ||
+        action == "change"
+    )
+    if (awakening_patch) {
+      from_diary <- action == "accept" || value %in% c("use_manual_diary_awakening_time", "manual_diary")
+      timestamp <- if (from_diary) .manual_timestamp(manual_diary, participant, day, "awakening_time", timezone) else .parse_local_time(if (nchar(value) == 16L) paste0(value, ":00") else value, timezone, "conversion decision awakening time")
       long <- .replace_long_value(long, participant, day, "day", "awakening_time", timestamp)
       long <- .replace_long_value(long, participant, day, "day", "date", as.POSIXct(as.Date(timestamp), tz = timezone))
-      long <- .replace_long_value(long, participant, day, "day", "awakening_type", "manual_diary")
+      long <- .replace_long_value(long, participant, day, "day", "awakening_type", if (from_diary) "manual_diary" else "decision")
     }
     sample_patch <- item$code[[1]] == "missing_scheduled_sample_event" && ((action == "accept" && item$proposed_action[[1]] == "use_manual_diary_sampling_time") || (action == "change" && value %in% c("use_manual_diary_sampling_time", "use_default")))
     if (sample_patch) {
