@@ -1,0 +1,7 @@
+^\.github$
+^\.git$
+^\.gitignore$
+^\.Rproj\.user$
+^README\.md$
+^renv$
+^tests/testthat/_snaps$
