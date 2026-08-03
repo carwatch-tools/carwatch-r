@@ -112,6 +112,38 @@
   dplyr::bind_rows(rows)
 }
 
+.protocol_order_issues <- function(raw_logs, protocol_manifest = NULL) {
+  if (!is.null(protocol_manifest)) return(list())
+  metadata <- raw_logs[raw_logs$action == "study_metadata", , drop = FALSE]
+  configs <- lapply(metadata$payload, .registration_config)
+  keys <- vapply(configs, function(config) if (is.null(config)) NA_character_ else .registration_key(config), character(1))
+  valid <- !is.na(keys)
+  keys <- keys[valid]
+  participants <- metadata$participant[valid]
+  sequences <- lapply(split(keys, participants, drop = TRUE), unique)
+  unique_keys <- unique(keys)
+  if (length(unique_keys) < 2L) return(list())
+  precedes <- matrix(0L, nrow = length(unique_keys), ncol = length(unique_keys), dimnames = list(unique_keys, unique_keys))
+  for (sequence in sequences) if (length(sequence) > 1L) for (left in seq_along(sequence)) if (left < length(sequence)) for (right in (left + 1L):length(sequence)) precedes[sequence[[left]], sequence[[right]]] <- precedes[sequence[[left]], sequence[[right]]] + 1L
+  issues <- list()
+  for (left in seq_len(nrow(precedes) - 1L)) for (right in (left + 1L):ncol(precedes)) if (precedes[left, right] == precedes[right, left] && precedes[left, right] > 0L) issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("ambiguous_protocol_order", "__cohort__", details = list(left = rownames(precedes)[[left]], right = rownames(precedes)[[right]])), code = "ambiguous_protocol_order", participant = "__cohort__", day = NA_character_, sample_id = NA_character_, proposed_action = "use_deterministic_protocol_order", user_decision = "", resolution_status = "unresolved")
+  edges <- precedes > t(precedes)
+  diag(edges) <- FALSE
+  remaining <- unique_keys
+  cyclic <- FALSE
+  while (length(remaining)) {
+    incoming <- vapply(remaining, function(key) any(edges[remaining, key, drop = TRUE]), logical(1))
+    available <- remaining[!incoming]
+    if (!length(available)) {
+      cyclic <- TRUE
+      break
+    }
+    remaining <- setdiff(remaining, available[[1]])
+  }
+  if (cyclic) issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("cyclic_protocol_order", "__cohort__", details = list(configurations = unique_keys)), code = "cyclic_protocol_order", participant = "__cohort__", day = NA_character_, sample_id = NA_character_, proposed_action = "use_deterministic_protocol_order", user_decision = "", resolution_status = "unresolved")
+  issues
+}
+
 #' Extract the registration-aware protocol schedule
 #' @param raw_logs Immutable events returned by [read_raw_logs()].
 #' @param protocol_manifest Optional ordered registration configuration.
@@ -501,7 +533,7 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
   participants <- sort(unique(.as_character_id(raw_logs$participant, "Raw-log participant IDs")))
   timezone <- attr(raw_logs$timestamp, "tzone") %||% "Europe/Berlin"
   metadata <- raw_logs[raw_logs$action == "study_metadata", , drop = FALSE]
-  issues <- list(); records <- list()
+  issues <- .protocol_order_issues(raw_logs, protocol_manifest); records <- list()
   for (participant in participants) {
     events <- dplyr::arrange(dplyr::filter(raw_logs, .data$participant == .env$participant), .data$timestamp)
     registrations <- lapply(events$payload[events$action == "study_metadata"], .registration_config)

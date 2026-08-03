@@ -265,6 +265,29 @@ test_that("protocol order follows observed registration precedence", {
   expect_identical(samples$day[samples$participant == "vp01" & samples$sample == "b" & samples$barcode == "b-01"], "D2")
 })
 
+test_that("ambiguous and cyclic cohort protocol orders are reported", {
+  timezone <- "Europe/Berlin"
+  metadata <- function(name, sample) list(study_name = name, saliva_ids = sample, saliva_times = 0, study_days = 1)
+  ambiguous <- tibble::tibble(
+    participant = c("vp01", "vp01", "vp02", "vp02"),
+    timestamp = as.POSIXct(c("2025-05-15 05:00:00", "2025-05-15 06:00:00", "2025-05-16 05:00:00", "2025-05-16 06:00:00"), tz = timezone),
+    action = rep("study_metadata", 4),
+    payload = list(metadata("a", "a"), metadata("b", "b"), metadata("b", "b"), metadata("a", "a")),
+    source_file = rep("one.csv", 4)
+  )
+  ambiguous_report <- convert_raw_logs(ambiguous, errors = "warn", create_report = TRUE)$report
+  expect_true(any(ambiguous_report$issues$code == "ambiguous_protocol_order"))
+  cyclic <- tibble::tibble(
+    participant = rep(c("vp01", "vp02", "vp03"), each = 3),
+    timestamp = as.POSIXct(rep(c("2025-05-15 05:00:00", "2025-05-15 06:00:00", "2025-05-15 07:00:00"), 3), tz = timezone),
+    action = rep("study_metadata", 9),
+    payload = list(metadata("a", "a"), metadata("b", "b"), metadata("c", "c"), metadata("b", "b"), metadata("c", "c"), metadata("a", "a"), metadata("c", "c"), metadata("a", "a"), metadata("b", "b")),
+    source_file = rep("one.csv", 9)
+  )
+  cyclic_report <- convert_raw_logs(cyclic, errors = "warn", create_report = TRUE)$report
+  expect_true(any(cyclic_report$issues$code == "cyclic_protocol_order"))
+})
+
 test_that("a change decision sorts a complete scan series by time", {
   timezone <- "Europe/Berlin"
   raw <- tibble::tibble(
