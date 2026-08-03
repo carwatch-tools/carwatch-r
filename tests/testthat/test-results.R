@@ -252,6 +252,44 @@ test_that("registration-order violations retain the canonical schedule and audit
   expect_identical(details$previous$metadata_source_files, "second.csv")
 })
 
+test_that("saliva merges correct swaps for physical and positional matching", {
+  samples <- c("B1", "B2", "B3", "B4")
+  long <- dplyr::bind_rows(lapply(seq_along(samples), function(position) {
+    tibble::tibble(
+      participant = "p1", day = "D1", sample = samples[[position]],
+      variable = c("sampling_time", "recorded_sample", "sample_position"),
+      value = list(
+        as.POSIXct(sprintf("2025-05-15 06:%02d:00", position), tz = "Europe/Berlin"),
+        c("B1", "B3", "B2", "B4")[[position]], position
+      )
+    )
+  }))
+  results <- carwatch:::.from_long_results(long)
+  physical <- merge_saliva(results, tibble::tibble(participant = "p1", sample = samples, cortisol = c(1, 2, 3, 4)))
+  positional <- merge_saliva(results, tibble::tibble(participant = "p1", day = "D1", sample_position = seq_along(samples), cortisol = c(1, 2, 3, 4)), match_on = "position")
+  expect_equal(as_sample_events(physical)$cortisol, c(1, 3, 2, 4))
+  expect_equal(as_sample_events(positional)$cortisol, c(1, 3, 2, 4))
+  expect_true(all(as_sample_events(positional)$mismatch_corrected[c(2, 3)]))
+})
+
+test_that("saliva merges validate physical tubes and missing app events", {
+  samples <- c("B1", "B2")
+  long <- dplyr::bind_rows(lapply(seq_along(samples), function(position) tibble::tibble(
+    participant = "p1", day = "D1", sample = samples[[position]],
+    variable = c("sampling_time", "recorded_sample", "sample_position"),
+    value = list(as.POSIXct(sprintf("2025-05-15 06:%02d:00", position), tz = "Europe/Berlin"), "B1", position)
+  )))
+  results <- carwatch:::.from_long_results(long)
+  saliva <- tibble::tibble(participant = "p1", sample = samples, cortisol = c(1, 2))
+  expect_error(merge_saliva(results, saliva), "same physical saliva tube")
+  long$value[[4]] <- as.POSIXct(NA)
+  long$value[[5]] <- "B2"
+  results <- carwatch:::.from_long_results(long)
+  expect_error(merge_saliva(results, saliva, missing_carwatch_data = "raise"), "scheduled_sample=B2")
+  bad <- saliva; bad$cortisol[[1]] <- "invalid"
+  expect_error(merge_saliva(results, bad), "numeric")
+})
+
 test_that("a collection-date mapping reassigns scans by sample position", {
   timezone <- "Europe/Berlin"
   raw <- tibble::tibble(
