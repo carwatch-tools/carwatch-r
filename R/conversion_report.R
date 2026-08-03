@@ -29,7 +29,7 @@
 .canonical_json <- function(value) jsonlite::toJSON(.json_safe(value), auto_unbox = TRUE, null = "null", digits = NA)
 
 .stable_issue_id <- function(participant, registration = NA_integer_, registration_day = NA_integer_, day = NA_character_, sample_position = NA_integer_, sample_id = NA_character_, code, details = list()) {
-  details_json <- .canonical_json(details)
+  details_json <- as.character(.canonical_json(details))
   identity <- list(participant = participant %||% "__cohort__", registration = registration, registration_day = registration_day, day = day, sample_position = sample_position, sample_id = sample_id, code = code, details = details_json)
   substr(digest::digest(.canonical_json(identity), algo = "sha256", serialize = FALSE), 1L, 16L)
 }
@@ -49,7 +49,41 @@
   if (any(parameterized)) .carwatch_abort("Parameterized issue decisions require `user_decision_value`.", "carwatch_value_error")
   legacy <- frame$user_decision_value %in% c("patch_sampling_time", "patch_awakening_time")
   if (any(legacy)) .carwatch_abort("Issue decisions use obsolete manual-diary action names. Regenerate the conversion report.", "carwatch_value_error")
+  change <- frame$user_decision == "change"
+  unsupported_change <- change & !frame$code %in% c(
+    "multiple_collection_dates", "possible_reregistration",
+    "non_increasing_sampling_times", "missing_awakening_time",
+    "missing_scheduled_sample_event"
+  )
+  if (any(unsupported_change)) .carwatch_abort("change is not supported for one or more issue codes.", "carwatch_value_error")
+  invalid_default <- change & frame$user_decision_value == "use_default" & frame$code != "missing_scheduled_sample_event"
+  if (any(invalid_default)) .carwatch_abort("use_default is only valid for missing scheduled sample events.", "carwatch_value_error")
   frame
+}
+
+.decision_rows <- function(report) {
+  issues <- report$issues
+  if (!nrow(issues)) return(issues)
+  issues[issues$resolution_status == "resolved", , drop = FALSE]
+}
+
+.decision_value <- function(report, code, participant, day = NA_character_, sample_id = NA_character_) {
+  rows <- .decision_rows(report)
+  if (!nrow(rows)) return(list(action = "", value = ""))
+  rows <- rows[rows$code == code & rows$participant == participant, , drop = FALSE]
+  if (!is.na(day)) rows <- rows[is.na(rows$day) | rows$day == day, , drop = FALSE]
+  if (!is.na(sample_id)) rows <- rows[is.na(rows$sample_id) | rows$sample_id == sample_id, , drop = FALSE]
+  if (!nrow(rows)) return(list(action = "", value = ""))
+  list(action = rows$user_decision[[1]], value = rows$user_decision_value[[1]])
+}
+
+.decision_supersedes <- function(upstream, stale) {
+  if (upstream$user_decision %in% c("drop_participant")) return(upstream$participant == stale$participant)
+  if (upstream$user_decision == "drop_day") return(upstream$participant == stale$participant && identical(upstream$day, stale$day))
+  if (upstream$user_decision == "drop_sample") return(upstream$participant == stale$participant && identical(upstream$day, stale$day) && identical(upstream$sample_id, stale$sample_id))
+  if (upstream$code == "possible_reregistration" && upstream$user_decision == "change") return(stale$participant == upstream$participant)
+  if (upstream$code == "multiple_collection_dates" && upstream$user_decision == "change") return(stale$participant == upstream$participant)
+  FALSE
 }
 
 .new_conversion_report <- function(raw_logs, issue_decisions = NULL) {
@@ -62,7 +96,8 @@
 
 .report_add_issue <- function(report, code, message, participant = "__cohort__", registration = NA_integer_, registration_day = NA_integer_, day = NA_character_, sample_position = NA_integer_, sample_id = NA_character_, details = list(), proposed_action = "", proposed_action_description = "", default_user_decision = "accept") {
   base <- .stable_issue_id(participant, registration, registration_day, day, sample_position, sample_id, code, details)
-  count <- (report$occurrences[[base]] %||% 0L) + 1L; report$occurrences[[base]] <- count
+  count <- if (base %in% names(report$occurrences)) report$occurrences[[base]] + 1L else 1L
+  report$occurrences[[base]] <- count
   issue_id <- paste0(base, "-", count)
   selected <- report$decisions[report$decisions$issue_id == issue_id, , drop = FALSE]
   explicit <- nrow(selected) == 1L && nzchar(selected$user_decision[[1]])
@@ -72,7 +107,7 @@
   report$issues <- dplyr::bind_rows(report$issues, tibble::tibble(
     participant = participant, day = day, sample_id = sample_id, code = code,
     registration = as.integer(registration), registration_day = as.integer(registration_day), sample_position = as.integer(sample_position),
-    issue_id = issue_id, message = gsub("\\s+", " ", trimws(message)), details = .canonical_json(details), proposed_action = proposed_action,
+    issue_id = issue_id, message = gsub("\\s+", " ", trimws(message)), details = as.character(.canonical_json(details)), proposed_action = proposed_action,
     proposed_action_description = proposed_action_description, resolution_status = status,
     user_decision = if (explicit) decision else default_user_decision,
     user_decision_value = if (explicit) selected$user_decision_value[[1]] else ""
@@ -84,7 +119,12 @@
   stale <- setdiff(report$decisions$issue_id[report$decisions$user_decision != ""], report$encountered)
   # Scope drops legitimately make downstream issue IDs disappear. Other stale IDs
   # remain an explicit audit error rather than silently changing a conversion.
-  if (length(stale)) .carwatch_abort(sprintf("Issue decisions contain IDs not reproduced from the current raw logs: %s.", paste(stale, collapse = ", ")), "carwatch_value_error")
+  if (length(stale)) {
+    supplied <- report$decisions[match(stale, report$decisions$issue_id), , drop = FALSE]
+    encountered <- report$issues[report$issues$issue_id %in% report$encountered, , drop = FALSE]
+    superseded <- vapply(seq_len(nrow(supplied)), function(index) any(vapply(seq_len(nrow(encountered)), function(other) .decision_supersedes(encountered[other, , drop = FALSE], supplied[index, , drop = FALSE]), logical(1))), logical(1))
+    if (any(!superseded)) .carwatch_abort(sprintf("Issue decisions contain IDs not reproduced from the current raw logs: %s.", paste(stale[!superseded], collapse = ", ")), "carwatch_value_error")
+  }
   issues <- report$issues
   if (nrow(issues)) {
     priority <- match(issues$code, .conversion_issue_codes, nomatch = length(.conversion_issue_codes) + 1L)

@@ -42,3 +42,24 @@ test_that("position-indexed merging preserves the canonical representation", {
   expect_false(anyNA(as_sample_events(merged)$cortisol))
   expect_true(all(c("cortisol_auc_g", "cortisol_auc_i") %in% names(compute_features_from_carwatch(merged))))
 })
+
+test_that("accepted diary decisions patch a missing awakening time", {
+  timezone <- "Europe/Berlin"
+  raw <- tibble::tibble(
+    participant = c("vp01", "vp01"),
+    timestamp = as.POSIXct(c("2025-05-15 05:00:00", "2025-05-15 06:05:00"), tz = timezone),
+    action = c("study_metadata", "barcode_scanned"),
+    payload = list(
+      list(study_name = "study", saliva_ids = "s1", saliva_times = 0, study_days = 1),
+      list(sample_expected = "s1", sample_scanned = "s1", barcode_value = "x", day_expected = 1, day_scanned = 1)
+    ),
+    source_file = c("one.csv", "one.csv")
+  )
+  initial <- convert_raw_logs(raw, errors = "warn", create_report = TRUE)
+  decisions <- initial$report$issues
+  decisions$user_decision[decisions$code == "missing_awakening_time"] <- "accept"
+  diary <- tibble::tibble(participant = "vp01", day = "D1", awakening_time = "2025-05-15 06:00:00")
+  patched <- convert_raw_logs(raw, errors = "warn", create_report = TRUE, issue_decisions = decisions, manual_diary = diary)
+  expect_false(is.na(as_study_days(patched$results)$awakening_time[[1]]))
+  expect_identical(as_sample_events(patched$results)$sampling_time_source[[1]], "app")
+})

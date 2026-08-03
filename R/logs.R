@@ -118,6 +118,78 @@ summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("e
   )
 }
 
+.replace_long_value <- function(long, participant, day, sample, variable, value) {
+  index <- which(long$participant == participant & long$day == day & long$sample == sample & long$variable == variable)
+  if (length(index) != 1L) .carwatch_abort("Conversion patch could not resolve one canonical result value.", "carwatch_schema_error")
+  long$value[[index]] <- value
+  long
+}
+
+.manual_timestamp <- function(manual_diary, participant, day, column, timezone) {
+  if (is.null(manual_diary)) .carwatch_abort("A conversion decision requires a manual diary.", "carwatch_value_error")
+  .require_columns(manual_diary, c("participant", "day", column), "Manual diary")
+  row <- manual_diary[manual_diary$participant == participant & manual_diary$day == day, , drop = FALSE]
+  if (nrow(row) != 1L || is.na(row[[column]][[1]])) .carwatch_abort(sprintf("Manual diary has no %s value for participant=%s, day=%s.", column, participant, day), "carwatch_value_error")
+  value <- row[[column]][[1]]
+  if (inherits(value, "POSIXt")) return(value)
+  value <- as.character(value)
+  if (nchar(value) == 16L) value <- paste0(value, ":00")
+  .parse_local_time(value, timezone, sprintf("manual diary %s", column))
+}
+
+.scheduled_patch_time <- function(long, schedule, participant, day, sample, timezone, fallback = NULL) {
+  expected <- schedule[schedule$day == day & schedule$scheduled_sample == sample, , drop = FALSE]
+  if (nrow(expected) != 1L) .carwatch_abort("Schedule patch does not resolve one expected sample.", "carwatch_value_error")
+  row <- expected[1, , drop = FALSE]
+  date_index <- which(long$participant == participant & long$day == day & long$sample == "day" & long$variable == "date")
+  awakening_index <- which(long$participant == participant & long$day == day & long$sample == "day" & long$variable == "awakening_time")
+  collection_date <- long$value[[date_index[[1]]]]
+  awakening <- long$value[[awakening_index[[1]]]]
+  if (row$schedule_type[[1]] == "absolute") return(.day_timestamp(collection_date, row$absolute_clock[[1]], timezone))
+  prior <- schedule[schedule$day == day & schedule$sample_position <= row$sample_position[[1]] & schedule$schedule_type == "relative", , drop = FALSE]
+  offsets <- sum(prior$expected_interval_min, na.rm = TRUE)
+  if (is.na(awakening)) .carwatch_abort("Cannot apply a relative schedule patch without an awakening time.", "carwatch_value_error")
+  awakening + offsets * 60
+}
+
+.apply_conversion_patches <- function(long, report, schedule, manual_diary, sampling_schedule, timezone) {
+  selected <- .decision_rows(report)
+  if (!nrow(selected)) return(long)
+  for (index in seq_len(nrow(selected))) {
+    item <- selected[index, , drop = FALSE]
+    participant <- item$participant[[1]]; day <- item$day[[1]]; sample <- item$sample_id[[1]]
+    action <- item$user_decision[[1]]; value <- item$user_decision_value[[1]]
+    if (item$code[[1]] == "missing_awakening_time" && ((action == "accept" && item$proposed_action[[1]] == "use_manual_diary_awakening_time") || (action == "change" && value %in% c("use_manual_diary_awakening_time", "manual_diary")))) {
+      timestamp <- .manual_timestamp(manual_diary, participant, day, "awakening_time", timezone)
+      long <- .replace_long_value(long, participant, day, "day", "awakening_time", timestamp)
+      long <- .replace_long_value(long, participant, day, "day", "date", as.POSIXct(as.Date(timestamp), tz = timezone))
+      long <- .replace_long_value(long, participant, day, "day", "awakening_type", "manual_diary")
+    }
+    sample_patch <- item$code[[1]] == "missing_scheduled_sample_event" && ((action == "accept" && item$proposed_action[[1]] == "use_manual_diary_sampling_time") || (action == "change" && value %in% c("use_manual_diary_sampling_time", "use_default")))
+    if (sample_patch) {
+      timestamp <- if (action == "change" && value == "use_default") .scheduled_patch_time(long, schedule, participant, day, sample, timezone, sampling_schedule) else .manual_timestamp(manual_diary, participant, day, paste0("sampling_time_", item$sample_position[[1]]), timezone)
+      long <- .replace_long_value(long, participant, day, sample, "sampling_time", timestamp)
+      long <- .replace_long_value(long, participant, day, sample, "sampling_time_source", if (action == "change" && value == "use_default") "schedule" else "manual_diary")
+    }
+  }
+  long
+}
+
+.append_conversion_compliance <- function(long, participants, checker) {
+  long <- long[!long$variable %in% c("actual_interval_min", "time_deviation_min", "sample_compliant", "expected_sample_count", "recorded_sample_count", "assessed_sample_count", "compliant_sample_count", "non_compliant_samples", "day_compliant"), , drop = FALSE]
+  result <- .from_long_results(long, participants)
+  samples <- as_sample_events(result)
+  if (!nrow(samples)) return(long)
+  samples$scheduled_sample <- samples$sample
+  samples <- .evaluate_sampling_compliance(samples, checker)
+  additions <- lapply(c("actual_interval_min", "time_deviation_min", "sample_compliant"), function(variable) tibble::tibble(participant = samples$participant, day = samples$day, sample = samples$sample, variable = variable, value = as.list(samples[[variable]])))
+  day_values <- lapply(split(samples, interaction(samples$participant, samples$day, drop = TRUE)), function(group) {
+    failed <- group$sample[group$sample_compliant %in% FALSE]
+    tibble::tibble(participant = group$participant[[1]], day = group$day[[1]], sample = "day", variable = c("expected_sample_count", "recorded_sample_count", "assessed_sample_count", "compliant_sample_count", "non_compliant_samples", "day_compliant"), value = list(nrow(group), sum(!is.na(group$recorded_sample)), sum(!is.na(group$sample_compliant)), sum(group$sample_compliant %in% TRUE), if (length(failed)) paste(failed, collapse = ";") else NA_character_, all(group$sample_compliant %in% TRUE) && !anyNA(group$sample_compliant)))
+  })
+  dplyr::bind_rows(long, dplyr::bind_rows(additions), dplyr::bind_rows(day_values))
+}
+
 #' Convert immutable CARWatch raw logs to canonical Study Results
 #'
 #' The first pass only reports issues. Decisions passed through `issue_decisions`
@@ -233,10 +305,14 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
   # `issue_decisions` count as executable decisions.
   if (nrow(issue_frame)) for (row in seq_len(nrow(issue_frame))) {
     item <- issue_frame[row, , drop = FALSE]
-    added <- .report_add_issue(report_state, code = item$code[[1]], message = item$code[[1]], participant = item$participant[[1]], day = item$day[[1]], sample_id = item$sample_id[[1]], proposed_action = item$proposed_action[[1]])
+    context <- schedule[schedule$day == item$day[[1]] & schedule$scheduled_sample == item$sample_id[[1]], , drop = FALSE]
+    added <- .report_add_issue(report_state, code = item$code[[1]], message = item$code[[1]], participant = item$participant[[1]], day = item$day[[1]], sample_id = item$sample_id[[1]], registration = if (nrow(context)) context$registration[[1]] else NA_integer_, registration_day = if (nrow(context)) context$registration_day[[1]] else NA_integer_, sample_position = if (nrow(context)) context$sample_position[[1]] else NA_integer_, proposed_action = item$proposed_action[[1]])
     report_state <- added$report
   }
   if (!is.null(decision_frame) && nrow(report_state$issues)) {
+    long <- .apply_conversion_patches(long, report_state, schedule, manual_diary, sampling_schedule, timezone)
+    if (check_compliance) long <- .append_conversion_compliance(long, participants, compliance_checker)
+    results <- .from_long_results(long, participants)
     selected <- report_state$issues[report_state$issues$resolution_status == "resolved", c("participant", "day", "sample_id", "user_decision"), drop = FALSE]
     if (nrow(selected)) {
       remove_participants <- selected$participant[selected$user_decision == "drop_participant"]
