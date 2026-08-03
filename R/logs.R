@@ -241,6 +241,37 @@ summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("e
   .write_scan_event(long, scans[mismatched, , drop = FALSE], participant, day, target)
 }
 
+.apply_expected_sample_override <- function(long, event_records, schedule, item) {
+  participant <- item$participant[[1]]
+  day <- item$day[[1]]
+  scans <- .barcode_scan_rows(event_records, participant, day, item$sample_id[[1]])
+  if (!nrow(scans)) return(long)
+  scan <- scans[order(scans$timestamp), , drop = FALSE][1, , drop = FALSE]
+  action <- item$user_decision[[1]]
+  target <- if (action == "accept" && item$proposed_action[[1]] == "override_expected_sample") {
+    as.character(.payload_value(scan$payload[[1]], "sample_scanned", NA_character_))
+  } else if (action == "override_expected_sample") {
+    item$user_decision_value[[1]]
+  } else {
+    return(long)
+  }
+  available <- schedule$scheduled_sample[schedule$day == day]
+  if (!nzchar(target) || !target %in% available) {
+    .carwatch_abort(
+      sprintf("Cannot override an expected sample with an ID outside the active registration: participant=%s, day=%s, requested_sample=%s.", shQuote(participant), shQuote(day), shQuote(target)),
+      "carwatch_value_error"
+    )
+  }
+  existing_time <- long$value[[which(long$participant == participant & long$day == day & long$sample == target & long$variable == "sampling_time")]]
+  if (!is.na(existing_time)) {
+    .carwatch_abort(
+      sprintf("Cannot override an expected sample onto an occupied canonical position: participant=%s, day=%s, requested_sample=%s.", shQuote(participant), shQuote(day), shQuote(target)),
+      "carwatch_value_error"
+    )
+  }
+  .write_scan_event(long, scan, participant, day, target)
+}
+
 .apply_conversion_patches <- function(long, report, schedule, manual_diary, sampling_schedule, timezone, event_records = NULL) {
   selected <- .decision_rows(report)
   if (!nrow(selected)) return(long)
@@ -265,6 +296,9 @@ summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("e
     }
     if (item$code[[1]] == "duplicate_scheduled_sample_events" && !is.null(event_records)) {
       long <- .apply_duplicate_scan_decision(long, event_records, schedule, item)
+    }
+    if (item$code[[1]] == "expected_sample_not_in_active_metadata" && !is.null(event_records)) {
+      long <- .apply_expected_sample_override(long, event_records, schedule, item)
     }
   }
   long
@@ -360,7 +394,12 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
         }
         expected_sample <- as.character(.payload_value(event$payload[[1]], "sample_expected", ""))
         if (!expected_sample %in% active_rows$scheduled_sample) {
-          issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("expected_sample_not_in_active_metadata", participant, details = list(sample_expected = expected_sample, source_file = event$source_file[[1]])), code = "expected_sample_not_in_active_metadata", participant = participant, day = NA_character_, sample_id = expected_sample, proposed_action = "override_expected_sample", user_decision = "", resolution_status = "unresolved")
+          day <- .coerce_event_day(event, schedule, active_registration)
+          recorded_sample <- as.character(.payload_value(event$payload[[1]], "sample_scanned", NA_character_))
+          occupied <- any(vapply(events$payload[events$action == "barcode_scanned"], function(payload) identical(as.character(.payload_value(payload, "sample_expected", "")), recorded_sample), logical(1)))
+          safe_target <- !is.na(day) && recorded_sample %in% active_rows$scheduled_sample && !occupied
+          issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("expected_sample_not_in_active_metadata", participant, day, expected_sample, details = list(sample_expected = expected_sample, source_file = event$source_file[[1]])), code = "expected_sample_not_in_active_metadata", participant = participant, day = day, sample_id = expected_sample, proposed_action = if (safe_target) "override_expected_sample" else "drop_sample", user_decision = "", resolution_status = "unresolved")
+          if (!is.na(day)) records[[length(records) + 1L]] <- tibble::tibble(participant = participant, day = day, action = event$action[[1]], timestamp = event$timestamp[[1]], payload = list(event$payload[[1]]), source_file = event$source_file[[1]], registration = active_registration, registration_sources = paste(registration_sources, collapse = ";"))
           next
         }
         day <- .coerce_event_day(event, schedule, active_registration)

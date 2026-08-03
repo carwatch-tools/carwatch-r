@@ -112,6 +112,31 @@ test_that("accept reassigns a safe duplicate scan to its recorded sample", {
   expect_equal(samples$recorded_sample, c("s1", "s2"))
 })
 
+test_that("expected-sample override moves an invalid scan only after decision", {
+  timezone <- "Europe/Berlin"
+  raw <- tibble::tibble(
+    participant = rep("vp01", 3),
+    timestamp = as.POSIXct(c("2025-05-15 05:00:00", "2025-05-15 06:10:00", "2025-05-15 06:20:00"), tz = timezone),
+    action = c("study_metadata", rep("barcode_scanned", 2)),
+    payload = list(
+      list(study_name = "study", saliva_ids = c("s1", "s2"), saliva_times = c(0, 30), study_days = 1),
+      list(sample_expected = "invalid", sample_scanned = "s1", barcode_value = "001", day_expected = 1, day_scanned = 1),
+      list(sample_expected = "s2", sample_scanned = "s2", barcode_value = "002", day_expected = 1, day_scanned = 1)
+    ),
+    source_file = rep("one.csv", 3)
+  )
+  initial <- convert_raw_logs(raw, errors = "warn", create_report = TRUE)
+  issue <- initial$report$issues$code == "expected_sample_not_in_active_metadata"
+  expect_identical(initial$report$issues$proposed_action[issue], "override_expected_sample")
+  expect_true(is.na(as_sample_events(initial$results)$sampling_time[as_sample_events(initial$results)$sample == "s1"]))
+  decisions <- initial$report$issues
+  decisions$user_decision[!issue] <- "keep"
+  final <- convert_raw_logs(raw, errors = "warn", create_report = TRUE, issue_decisions = decisions)
+  samples <- as_sample_events(final$results)
+  expect_equal(samples$barcode, c("001", "002"))
+  expect_equal(samples$recorded_sample, c("s1", "s2"))
+})
+
 test_that("a change decision sorts a complete scan series by time", {
   timezone <- "Europe/Berlin"
   raw <- tibble::tibble(
