@@ -340,6 +340,23 @@ test_that("re-registration overrides remap the later epoch by sample position", 
   expect_identical(samples$recorded_sample[samples$day == "D2" & samples$sample == "new-2"], "new-2")
 })
 
+test_that("registration source provenance is kept per canonical epoch", {
+  timezone <- "Europe/Berlin"
+  raw <- tibble::tibble(
+    participant = rep("vp01", 6),
+    timestamp = as.POSIXct(c("2025-05-15 05:00:00", "2025-05-15 06:00:00", "2025-05-15 06:10:00", "2025-05-16 05:00:00", "2025-05-16 06:00:00", "2025-05-16 06:10:00"), tz = timezone),
+    action = c("study_metadata", "spontaneous_awakening", "barcode_scanned", "study_metadata", "spontaneous_awakening", "barcode_scanned"),
+    payload = list(
+      list(study_name = "first", saliva_ids = "a", saliva_times = 0, study_days = 1), list(id = 0), list(sample_expected = "a", sample_scanned = "a", barcode_value = "001", day_expected = 1, day_scanned = 1),
+      list(study_name = "second", saliva_ids = "b", saliva_times = 0, study_days = 1), list(id = 0), list(sample_expected = "b", sample_scanned = "b", barcode_value = "002", day_expected = 1, day_scanned = 1)
+    ),
+    source_file = c("first.csv", "first.csv", "first.csv", "second.csv", "second.csv", "second.csv")
+  )
+  days <- as_study_days(convert_raw_logs(raw, errors = "warn"))
+  expect_identical(days$registration_sources[days$day == "D1"], "first.csv")
+  expect_identical(days$registration_sources[days$day == "D2"], "second.csv")
+})
+
 test_that("a change decision sorts a complete scan series by time", {
   timezone <- "Europe/Berlin"
   raw <- tibble::tibble(

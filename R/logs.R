@@ -596,7 +596,7 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
     active_registration <- NA_integer_
     awakening_day_counter <- 0L
     current_config_key <- .registration_key(registrations[[1]])
-    registration_sources <- unique(events$source_file[events$action == "study_metadata"])
+    registration_sources <- list()
     collection_started <- FALSE
     metadata_seen <- FALSE
     active_source_registration <- NA_integer_
@@ -622,6 +622,10 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
           current_config_key <- new_key
           position <- which(vapply(.protocol_from_logs(raw_logs, protocol_manifest), function(item) identical(.registration_key(item), current_config_key), logical(1)))
           if (length(position) && !override_applied) active_registration <- position[[1]]
+          if (!is.na(active_registration)) {
+            source_key <- as.character(active_registration)
+            registration_sources[[source_key]] <- sort(unique(c(registration_sources[[source_key]] %||% character(), event$source_file[[1]])))
+          }
           metadata_seen <- TRUE
         } else issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("invalid_study_metadata", participant, details = list(source_file = event$source_file[[1]])), code = "invalid_study_metadata", participant = participant, day = NA_character_, sample_id = NA_character_, proposed_action = "ignore_metadata_event", user_decision = "", resolution_status = "unresolved")
         next
@@ -653,13 +657,13 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
           occupied <- any(vapply(events$payload[events$action == "barcode_scanned"], function(payload) identical(as.character(.payload_value(payload, "sample_expected", "")), recorded_sample), logical(1)))
           safe_target <- !is.na(day) && recorded_sample %in% active_rows$scheduled_sample && !occupied
           issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("expected_sample_not_in_active_metadata", participant, day, expected_sample, details = list(sample_expected = expected_sample, source_file = event$source_file[[1]])), code = "expected_sample_not_in_active_metadata", participant = participant, day = day, sample_id = expected_sample, proposed_action = if (safe_target) "override_expected_sample" else "drop_sample", user_decision = "", resolution_status = "unresolved")
-          if (!is.na(day)) records[[length(records) + 1L]] <- tibble::tibble(participant = participant, day = day, action = event$action[[1]], timestamp = event$timestamp[[1]], payload = list(event$payload[[1]]), source_file = event$source_file[[1]], registration = active_registration, registration_sources = paste(registration_sources, collapse = ";"), scheduled_sample_override = scheduled_sample_override, recorded_sample_override = recorded_sample_override)
+          if (!is.na(day)) records[[length(records) + 1L]] <- tibble::tibble(participant = participant, day = day, action = event$action[[1]], timestamp = event$timestamp[[1]], payload = list(event$payload[[1]]), source_file = event$source_file[[1]], registration = active_registration, registration_sources = paste(registration_sources[[as.character(active_registration)]] %||% character(), collapse = ";"), scheduled_sample_override = scheduled_sample_override, recorded_sample_override = recorded_sample_override)
           next
         }
         day <- .coerce_event_day(event, schedule, active_registration)
       }
       if (is.na(day)) next
-      records[[length(records) + 1L]] <- tibble::tibble(participant = participant, day = day, action = event$action[[1]], timestamp = event$timestamp[[1]], payload = list(event$payload[[1]]), source_file = event$source_file[[1]], registration = active_registration, registration_sources = paste(registration_sources, collapse = ";"), scheduled_sample_override = if (event$action[[1]] == "barcode_scanned") scheduled_sample_override else NA_character_, recorded_sample_override = if (event$action[[1]] == "barcode_scanned") recorded_sample_override else NA_character_)
+      records[[length(records) + 1L]] <- tibble::tibble(participant = participant, day = day, action = event$action[[1]], timestamp = event$timestamp[[1]], payload = list(event$payload[[1]]), source_file = event$source_file[[1]], registration = active_registration, registration_sources = paste(registration_sources[[as.character(active_registration)]] %||% character(), collapse = ";"), scheduled_sample_override = if (event$action[[1]] == "barcode_scanned") scheduled_sample_override else NA_character_, recorded_sample_override = if (event$action[[1]] == "barcode_scanned") recorded_sample_override else NA_character_)
     }
   }
   event_records <- if (length(records)) dplyr::bind_rows(records) else tibble::tibble(participant = character(), day = character(), action = character(), timestamp = as.POSIXct(character()), payload = list(), source_file = character(), registration = integer(), registration_sources = character(), scheduled_sample_override = character(), recorded_sample_override = character())
