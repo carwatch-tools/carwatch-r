@@ -344,11 +344,12 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
     long <- .apply_conversion_patches(long, report_state, schedule, manual_diary, sampling_schedule, timezone)
     if (check_compliance) long <- .append_conversion_compliance(long, participants, compliance_checker)
     results <- .from_long_results(long, participants)
-    selected <- report_state$issues[report_state$issues$resolution_status == "resolved", c("participant", "day", "sample_id", "user_decision"), drop = FALSE]
+    selected <- report_state$issues[report_state$issues$resolution_status == "resolved", c("participant", "day", "sample_id", "user_decision", "proposed_action"), drop = FALSE]
     if (nrow(selected)) {
-      remove_participants <- selected$participant[selected$user_decision == "drop_participant"]
-      remove_days <- selected[selected$user_decision == "drop_day", c("participant", "day"), drop = FALSE]
-      remove_samples <- selected[selected$user_decision == "drop_sample", c("participant", "day", "sample_id"), drop = FALSE]
+      selected$effective_action <- ifelse(selected$user_decision == "accept" & selected$proposed_action %in% c("drop_participant", "drop_day", "drop_sample"), selected$proposed_action, selected$user_decision)
+      remove_participants <- selected$participant[selected$effective_action == "drop_participant"]
+      remove_days <- selected[selected$effective_action == "drop_day", c("participant", "day"), drop = FALSE]
+      remove_samples <- selected[selected$effective_action == "drop_sample", c("participant", "day", "sample_id"), drop = FALSE]
       keep <- !long$participant %in% remove_participants
       if (nrow(remove_days)) keep <- keep & !paste(long$participant, long$day, sep = "\r") %in% paste(remove_days$participant, remove_days$day, sep = "\r")
       if (nrow(remove_samples)) keep <- keep & !(long$sample != "day" & paste(long$participant, long$day, long$sample, sep = "\r") %in% paste(remove_samples$participant, remove_samples$day, remove_samples$sample_id, sep = "\r"))

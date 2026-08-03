@@ -63,3 +63,23 @@ test_that("accepted diary decisions patch a missing awakening time", {
   expect_false(is.na(as_study_days(patched$results)$awakening_time[[1]]))
   expect_identical(as_sample_events(patched$results)$sampling_time_source[[1]], "app")
 })
+
+test_that("accept applies a proposed sample drop", {
+  timezone <- "Europe/Berlin"
+  raw <- tibble::tibble(
+    participant = rep("vp01", 4),
+    timestamp = as.POSIXct(c("2025-05-15 05:00:00", "2025-05-15 06:00:00", "2025-05-15 06:01:00", "2025-05-15 06:02:00"), tz = timezone),
+    action = c("study_metadata", "spontaneous_awakening", "barcode_scanned", "barcode_scanned"),
+    payload = list(
+      list(study_name = "study", saliva_ids = "s1", saliva_times = 0, study_days = 1),
+      list(id = 0),
+      list(sample_expected = "s1", sample_scanned = "s1", barcode_value = "a", day_expected = 1, day_scanned = 1),
+      list(sample_expected = "s1", sample_scanned = "s1", barcode_value = "b", day_expected = 1, day_scanned = 1)
+    ),
+    source_file = rep("one.csv", 4)
+  )
+  initial <- convert_raw_logs(raw, errors = "warn", create_report = TRUE)
+  expect_true(any(initial$report$issues$code == "duplicate_scheduled_sample_events"))
+  final <- convert_raw_logs(raw, errors = "warn", create_report = TRUE, issue_decisions = initial$report$issues)
+  expect_equal(nrow(as_sample_events(final$results)), 0L)
+})
