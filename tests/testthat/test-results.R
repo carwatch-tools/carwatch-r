@@ -310,6 +310,36 @@ test_that("manifest registrations missing for a participant are reported", {
   expect_identical(missing$participant[[1]], "vp01")
 })
 
+test_that("re-registration overrides remap the later epoch by sample position", {
+  timezone <- "Europe/Berlin"
+  raw <- tibble::tibble(
+    participant = rep("vp01", 7),
+    timestamp = as.POSIXct(c("2025-05-15 05:00:00", "2025-05-15 06:00:00", "2025-05-15 06:10:00", "2025-05-15 06:15:00", "2025-05-15 06:20:00", "2025-05-16 05:00:00", "2025-05-16 06:00:00"), tz = timezone),
+    action = c("study_metadata", "spontaneous_awakening", "barcode_scanned", "study_metadata", "barcode_scanned", "study_metadata", "spontaneous_awakening"),
+    payload = list(
+      list(study_name = "source", saliva_ids = c("old-1", "old-2"), saliva_times = c(0, 30), study_days = 1),
+      list(id = 0),
+      list(sample_expected = "old-1", sample_scanned = "old-1", barcode_value = "001", day_expected = 1, day_scanned = 1),
+      list(study_name = "source", saliva_ids = c("old-1", "old-2"), saliva_times = c(0, 30), study_days = 1),
+      list(sample_expected = "old-2", sample_scanned = "old-2", barcode_value = "002", day_expected = 1, day_scanned = 1),
+      list(study_name = "target", saliva_ids = c("new-1", "new-2"), saliva_times = c(0, 30), study_days = 1),
+      list(id = 0)
+    ),
+    source_file = rep("one.csv", 7)
+  )
+  initial <- convert_raw_logs(raw, errors = "warn", create_report = TRUE)
+  decisions <- initial$report$issues
+  target <- decisions$code == "possible_reregistration"
+  decisions$user_decision[!target] <- "keep"
+  decisions$user_decision[target] <- "change"
+  decisions$user_decision_value[target] <- '{"registration":2}'
+  final <- convert_raw_logs(raw, errors = "warn", create_report = TRUE, issue_decisions = decisions)
+  samples <- as_sample_events(final$results)
+  expect_identical(samples$barcode[samples$day == "D1" & samples$sample == "old-1"], "001")
+  expect_identical(samples$barcode[samples$day == "D2" & samples$sample == "new-2"], "002")
+  expect_identical(samples$recorded_sample[samples$day == "D2" & samples$sample == "new-2"], "new-2")
+})
+
 test_that("a change decision sorts a complete scan series by time", {
   timezone <- "Europe/Berlin"
   raw <- tibble::tibble(
