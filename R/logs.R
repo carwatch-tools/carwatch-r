@@ -305,6 +305,17 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
     dplyr::ungroup()
   results <- .from_long_results(long, participants)
   samples <- as_sample_events(results); days <- as_study_days(results)
+  if (nrow(samples)) for (group in split(samples, interaction(samples$participant, samples$day, drop = TRUE, lex.order = TRUE))) {
+    ordered <- group[order(group$sample_position), , drop = FALSE]
+    recorded <- ordered[!is.na(ordered$sampling_time), , drop = FALSE]
+    if (nrow(recorded) > 1L && any(diff(as.numeric(recorded$sampling_time)) <= 0)) {
+      issues[[length(issues) + 1L]] <- tibble::tibble(
+        issue_id = .issue_id("non_increasing_sampling_times", recorded$participant[[1]], recorded$day[[1]], details = list(sample_positions = recorded$sample_position, timestamps = format(recorded$sampling_time, "%Y-%m-%dT%H:%M:%S%z"))),
+        code = "non_increasing_sampling_times", participant = recorded$participant[[1]], day = recorded$day[[1]], sample_id = NA_character_,
+        proposed_action = "drop_day", user_decision = "", resolution_status = "unresolved"
+      )
+    }
+  }
   if (check_compliance && nrow(samples)) {
     samples$scheduled_sample <- samples$sample
     if (!"awakening_time" %in% names(samples)) samples <- dplyr::left_join(samples, dplyr::select(days, dplyr::all_of(c("participant", "day", "awakening_time"))), by = c("participant", "day"))
