@@ -229,6 +229,18 @@ test_that("registration schedule rejects ambiguous cohort order unless warned", 
   expect_identical(unique(schedule$day), c("D1", "D2"))
 })
 
+test_that("conversion reports mark scope-covered issues as superseded", {
+  raw <- tibble::tibble(participant = "p1", timestamp = as.POSIXct("2025-05-15", tz = "Europe/Berlin"), action = "study_metadata", payload = list(list(saliva_ids = "S1")), source_file = "one.csv")
+  initial <- carwatch:::.new_conversion_report(raw)
+  seed <- carwatch:::.report_add_issue(initial, code = "missing_awakening_time", message = "wake", participant = "p1", day = "D1", proposed_action = "use_manual_diary_awakening_time")
+  decisions <- seed$report$issues
+  decisions$user_decision[[1]] <- "drop_day"
+  report <- carwatch:::.new_conversion_report(raw, decisions)
+  upstream <- carwatch:::.report_add_issue(report, code = "missing_awakening_time", message = "wake", participant = "p1", day = "D1", proposed_action = "use_manual_diary_awakening_time")
+  covered <- carwatch:::.report_add_issue(upstream$report, code = "missing_scheduled_sample_event", message = "sample", participant = "p1", day = "D1", sample_id = "S1", proposed_action = "use_manual_diary_sampling_time")
+  expect_identical(covered$report$issues$resolution_status[[2]], "superseded")
+})
+
 test_that("registration-order violations retain the canonical schedule and audit sources", {
   raw <- tibble::tibble(
     participant = rep("p1", 3),

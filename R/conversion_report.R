@@ -96,6 +96,16 @@
   ), class = "carwatch_conversion_report")
 }
 
+.scope_decision <- function(report, participant, day = NA_character_, sample_id = NA_character_) {
+  decisions <- report$decisions
+  if (!nrow(decisions) || !"participant" %in% names(decisions)) return("")
+  rows <- decisions[decisions$participant == participant & decisions$user_decision %in% c("drop_participant", "drop_day", "drop_sample"), , drop = FALSE]
+  if (any(rows$user_decision == "drop_participant")) return("drop_participant")
+  if (!is.na(day) && "day" %in% names(rows) && any(rows$user_decision == "drop_day" & rows$day == day, na.rm = TRUE)) return("drop_day")
+  if (!is.na(day) && !is.na(sample_id) && all(c("day", "sample_id") %in% names(rows)) && any(rows$user_decision == "drop_sample" & rows$day == day & rows$sample_id == sample_id, na.rm = TRUE)) return("drop_sample")
+  ""
+}
+
 .report_add_issue <- function(report, code, message, participant = "__cohort__", registration = NA_integer_, registration_day = NA_integer_, day = NA_character_, sample_position = NA_integer_, sample_id = NA_character_, details = list(), proposed_action = "", proposed_action_description = "", default_user_decision = "accept") {
   base <- .stable_issue_id(participant, registration, registration_day, day, sample_position, sample_id, code, details)
   count <- if (base %in% names(report$occurrences)) report$occurrences[[base]] + 1L else 1L
@@ -105,7 +115,8 @@
   explicit <- nrow(selected) == 1L && nzchar(selected$user_decision[[1]])
   decision <- if (explicit) selected$user_decision[[1]] else ""
   if (explicit) report$encountered <- c(report$encountered, issue_id)
-  status <- if (explicit) "resolved" else "unresolved"
+  inherited <- if (!explicit) .scope_decision(report, participant, day, sample_id) else ""
+  status <- if (explicit) "resolved" else if (nzchar(inherited)) "superseded" else "unresolved"
   report$issues <- dplyr::bind_rows(report$issues, tibble::tibble(
     participant = participant, day = day, sample_id = sample_id, code = code,
     registration = as.integer(registration), registration_day = as.integer(registration_day), sample_position = as.integer(sample_position),
