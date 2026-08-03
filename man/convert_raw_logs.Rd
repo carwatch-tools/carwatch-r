@@ -27,7 +27,9 @@ convert_raw_logs(
 
 \item{issue_decisions}{A prior editable issue report with decisions.}
 
-\item{sampling_schedule}{Optional fallback schedule.}
+\item{sampling_schedule}{Optional fallback schedule for \code{use_default} sample
+decisions. Supply a position-indexed vector, a named sample list, or a
+named day list containing either form.}
 
 \item{manual_diary}{Optional normalized manual diary.}
 

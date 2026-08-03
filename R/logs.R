@@ -137,6 +137,15 @@ summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("e
   .parse_local_time(value, timezone, sprintf("manual diary %s", column))
 }
 
+.fallback_schedule_value <- function(fallback, day, sample, position) {
+  if (is.null(fallback)) .carwatch_abort("Cannot patch sampling time because registration metadata contains no usable schedule and no fallback `sampling_schedule` was supplied.", "carwatch_value_error")
+  values <- fallback
+  if (is.list(values) && !is.null(names(values)) && day %in% names(values)) values <- values[[day]]
+  if (is.list(values) && !is.null(names(values)) && sample %in% names(values)) return(values[[sample]])
+  if (length(values) < position || is.character(values) && length(values) == 1L) .carwatch_abort(sprintf("Fallback sampling_schedule must provide a value for %s/%s.", day, sample), "carwatch_value_error")
+  values[[position]]
+}
+
 .scheduled_patch_time <- function(long, schedule, participant, day, sample, timezone, fallback = NULL) {
   expected <- schedule[schedule$day == day & schedule$scheduled_sample == sample, , drop = FALSE]
   if (nrow(expected) != 1L) .carwatch_abort("Schedule patch does not resolve one expected sample.", "carwatch_value_error")
@@ -145,11 +154,20 @@ summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("e
   awakening_index <- which(long$participant == participant & long$day == day & long$sample == "day" & long$variable == "awakening_time")
   collection_date <- long$value[[date_index[[1]]]]
   awakening <- long$value[[awakening_index[[1]]]]
-  if (row$schedule_type[[1]] == "absolute") return(.day_timestamp(collection_date, row$absolute_clock[[1]], timezone))
-  prior <- schedule[schedule$day == day & schedule$sample_position <= row$sample_position[[1]] & schedule$schedule_type == "relative", , drop = FALSE]
-  offsets <- sum(prior$expected_interval_min, na.rm = TRUE)
-  if (is.na(awakening)) .carwatch_abort("Cannot apply a relative schedule patch without an awakening time.", "carwatch_value_error")
-  awakening + offsets * 60
+  if (row$schedule_type[[1]] == "relative" && !is.na(row$expected_interval_min[[1]])) {
+    prior <- schedule[schedule$day == day & schedule$sample_position <= row$sample_position[[1]] & schedule$schedule_type == "relative", , drop = FALSE]
+    offsets <- sum(prior$expected_interval_min, na.rm = TRUE)
+    if (is.na(awakening)) .carwatch_abort("Cannot apply a relative schedule patch without an awakening time.", "carwatch_value_error")
+    return(awakening + offsets * 60)
+  }
+  if (row$schedule_type[[1]] == "absolute" && !is.na(row$absolute_clock[[1]]) && nzchar(row$absolute_clock[[1]])) return(.day_timestamp(collection_date, row$absolute_clock[[1]], timezone))
+  fallback_value <- .fallback_schedule_value(fallback, day, sample, row$sample_position[[1]])
+  offset <- suppressWarnings(as.numeric(fallback_value))
+  if (!is.na(offset)) {
+    if (is.na(awakening)) .carwatch_abort("Cannot apply a relative fallback schedule without an awakening time.", "carwatch_value_error")
+    return(awakening + offset * 60)
+  }
+  .day_timestamp(collection_date, as.character(fallback_value), timezone)
 }
 
 .sort_sample_events_by_time <- function(long, schedule, participant, day) {
@@ -368,7 +386,9 @@ summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("e
 #' @param errors Unresolved-issue handling: "raise", "warn", or legacy "error".
 #' @param create_report Return a list containing results and the issue report.
 #' @param issue_decisions A prior editable issue report with decisions.
-#' @param sampling_schedule Optional fallback schedule.
+#' @param sampling_schedule Optional fallback schedule for `use_default` sample
+#'   decisions. Supply a position-indexed vector, a named sample list, or a
+#'   named day list containing either form.
 #' @param manual_diary Optional normalized manual diary.
 #' @param check_compliance Whether to calculate timing compliance.
 #' @param compliance_checker Timing tolerance configuration.
