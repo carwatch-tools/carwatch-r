@@ -196,7 +196,52 @@ summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("e
   long
 }
 
-.apply_conversion_patches <- function(long, report, schedule, manual_diary, sampling_schedule, timezone) {
+.barcode_scan_rows <- function(event_records, participant, day, sample) {
+  candidates <- event_records[
+    event_records$participant == participant & event_records$day == day &
+      event_records$action == "barcode_scanned",
+    , drop = FALSE
+  ]
+  if (!nrow(candidates)) return(candidates)
+  expected <- vapply(candidates$payload, function(payload) identical(as.character(.payload_value(payload, "sample_expected", "")), as.character(sample)), logical(1))
+  candidates[expected, , drop = FALSE]
+}
+
+.write_scan_event <- function(long, event, participant, day, sample) {
+  payload <- event$payload[[1]]
+  values <- list(
+    sampling_time = event$timestamp[[1]],
+    barcode = .payload_value(payload, "barcode_value", NA_character_),
+    recorded_sample = .payload_value(payload, "sample_scanned", NA_character_),
+    sampling_time_source = "app",
+    day_expected = .payload_value(payload, "day_expected", NA_integer_),
+    day_scanned = .payload_value(payload, "day_scanned", NA_integer_)
+  )
+  for (variable in names(values)) long <- .replace_long_value(long, participant, day, sample, variable, values[[variable]])
+  long
+}
+
+.apply_duplicate_scan_decision <- function(long, event_records, schedule, item) {
+  participant <- item$participant[[1]]
+  day <- item$day[[1]]
+  sample <- item$sample_id[[1]]
+  scans <- .barcode_scan_rows(event_records, participant, day, sample)
+  scans <- scans[order(scans$timestamp), , drop = FALSE]
+  if (item$user_decision[[1]] != "accept" || nrow(scans) < 2L) return(long)
+  if (item$proposed_action[[1]] == "keep_earliest_scan") return(.write_scan_event(long, scans[1, , drop = FALSE], participant, day, sample))
+  if (item$proposed_action[[1]] != "reassign_to_recorded_sample" || nrow(scans) != 2L) return(long)
+  recorded <- vapply(scans$payload, function(payload) as.character(.payload_value(payload, "sample_scanned", NA_character_)), character(1))
+  correct <- which(recorded == sample)
+  mismatched <- which(recorded != sample & !is.na(recorded))
+  day_samples <- schedule$scheduled_sample[schedule$day == day]
+  target <- if (length(mismatched) == 1L) recorded[[mismatched]] else NA_character_
+  target_scans <- if (!is.na(target)) .barcode_scan_rows(event_records, participant, day, target) else event_records[0, , drop = FALSE]
+  if (length(correct) != 1L || length(mismatched) != 1L || !target %in% day_samples || nrow(target_scans)) return(long)
+  long <- .write_scan_event(long, scans[correct, , drop = FALSE], participant, day, sample)
+  .write_scan_event(long, scans[mismatched, , drop = FALSE], participant, day, target)
+}
+
+.apply_conversion_patches <- function(long, report, schedule, manual_diary, sampling_schedule, timezone, event_records = NULL) {
   selected <- .decision_rows(report)
   if (!nrow(selected)) return(long)
   for (index in seq_len(nrow(selected))) {
@@ -217,6 +262,9 @@ summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("e
     }
     if (item$code[[1]] == "non_increasing_sampling_times" && action == "change") {
       long <- .sort_sample_events_by_time(long, schedule, participant, day)
+    }
+    if (item$code[[1]] == "duplicate_scheduled_sample_events" && !is.null(event_records)) {
+      long <- .apply_duplicate_scan_decision(long, event_records, schedule, item)
     }
   }
   long
@@ -336,9 +384,18 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
       position <- positions[j, ]
       expected_match <- vapply(events$payload, function(payload) identical(as.character(.payload_value(payload, "sample_expected", "")), as.character(position$scheduled_sample)), logical(1))
       scan <- events[events$action == "barcode_scanned" & expected_match, , drop = FALSE]
-      if (nrow(scan) > 1L) issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("duplicate_scheduled_sample_events", participant, day, position$scheduled_sample, details = list(event_count = nrow(scan))), code = "duplicate_scheduled_sample_events", participant = participant, day = day, sample_id = position$scheduled_sample, proposed_action = "drop_sample", user_decision = "", resolution_status = "unresolved")
-      payload <- if (nrow(scan)) scan$payload[[1]] else list()
-      sampling_time <- if (nrow(scan)) scan$timestamp[[1]] else as.POSIXct(NA)
+      duplicate_reassignment <- FALSE
+      if (nrow(scan) > 1L) {
+        recorded <- vapply(scan$payload, function(payload) as.character(.payload_value(payload, "sample_scanned", NA_character_)), character(1))
+        correct <- which(recorded == position$scheduled_sample)
+        mismatched <- which(recorded != position$scheduled_sample & !is.na(recorded))
+        target <- if (length(mismatched) == 1L) recorded[[mismatched]] else NA_character_
+        target_present <- if (!is.na(target)) any(vapply(events$payload[events$action == "barcode_scanned"], function(payload) identical(as.character(.payload_value(payload, "sample_expected", "")), target), logical(1))) else TRUE
+        duplicate_reassignment <- nrow(scan) == 2L && length(correct) == 1L && length(mismatched) == 1L && target %in% positions$scheduled_sample && !target_present
+        issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("duplicate_scheduled_sample_events", participant, day, position$scheduled_sample, details = list(event_count = nrow(scan))), code = "duplicate_scheduled_sample_events", participant = participant, day = day, sample_id = position$scheduled_sample, proposed_action = if (duplicate_reassignment) "reassign_to_recorded_sample" else "keep_earliest_scan", user_decision = "", resolution_status = "unresolved")
+      }
+      payload <- if (nrow(scan) && nrow(scan) == 1L) scan$payload[[1]] else list()
+      sampling_time <- if (nrow(scan) == 1L) scan$timestamp[[1]] else as.POSIXct(NA)
       if (!nrow(scan)) issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("missing_scheduled_sample_event", participant, day, position$scheduled_sample), code = "missing_scheduled_sample_event", participant = participant, day = day, sample_id = position$scheduled_sample, proposed_action = "use_manual_diary_sampling_time", user_decision = "", resolution_status = "unresolved")
       scheduled <- if (position$schedule_type == "absolute") .day_timestamp(collection_date, position$absolute_clock, timezone) else as.POSIXct(NA)
       recorded_sample <- .payload_value(payload, "sample_scanned", NA_character_)
@@ -388,7 +445,7 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
     report_state <- added$report
   }
   if (!is.null(decision_frame) && nrow(report_state$issues)) {
-    long <- .apply_conversion_patches(long, report_state, schedule, manual_diary, sampling_schedule, timezone)
+    long <- .apply_conversion_patches(long, report_state, schedule, manual_diary, sampling_schedule, timezone, event_records)
     if (check_compliance) long <- .append_conversion_compliance(long, participants, compliance_checker)
     results <- .from_long_results(long, participants)
     selected <- report_state$issues[report_state$issues$resolution_status == "resolved", c("participant", "day", "sample_id", "user_decision", "proposed_action"), drop = FALSE]
@@ -405,7 +462,7 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
     }
   }
   if (errors == "raise" && nrow(report_state$issues) && is.null(issue_decisions)) .carwatch_abort("Raw-log conversion encountered unresolved issues. Run with `errors = 'warn'` and `create_report = TRUE` to review them.", "carwatch_schema_error")
-  if (create_report) return(list(results = results, report = .report_finalize(report_state, results, schedule, sum(event_records$action == "barcode_scanned"))))
+  if (create_report) return(list(results = results, report = .report_finalize(report_state, results, schedule, sum(!is.na(as_sample_events(results)$sampling_time)))))
   results
 }
 

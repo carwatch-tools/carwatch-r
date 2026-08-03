@@ -64,7 +64,7 @@ test_that("accepted diary decisions patch a missing awakening time", {
   expect_identical(as_sample_events(patched$results)$sampling_time_source[[1]], "app")
 })
 
-test_that("accept applies a proposed sample drop", {
+test_that("accept retains the earliest duplicate scan", {
   timezone <- "Europe/Berlin"
   raw <- tibble::tibble(
     participant = rep("vp01", 4),
@@ -79,9 +79,37 @@ test_that("accept applies a proposed sample drop", {
     source_file = rep("one.csv", 4)
   )
   initial <- convert_raw_logs(raw, errors = "warn", create_report = TRUE)
-  expect_true(any(initial$report$issues$code == "duplicate_scheduled_sample_events"))
+  expect_identical(initial$report$issues$proposed_action[initial$report$issues$code == "duplicate_scheduled_sample_events"], "keep_earliest_scan")
+  expect_true(is.na(as_sample_events(initial$results)$sampling_time[[1]]))
   final <- convert_raw_logs(raw, errors = "warn", create_report = TRUE, issue_decisions = initial$report$issues)
-  expect_equal(nrow(as_sample_events(final$results)), 0L)
+  sample <- as_sample_events(final$results)
+  expect_identical(sample$barcode[[1]], "a")
+  expect_equal(final$report$summary$recorded_sample_event_count, 1L)
+})
+
+test_that("accept reassigns a safe duplicate scan to its recorded sample", {
+  timezone <- "Europe/Berlin"
+  raw <- tibble::tibble(
+    participant = rep("vp01", 4),
+    timestamp = as.POSIXct(c("2025-05-15 05:00:00", "2025-05-15 06:10:00", "2025-05-15 06:20:00", "2025-05-15 06:30:00"), tz = timezone),
+    action = c("study_metadata", rep("barcode_scanned", 3)),
+    payload = list(
+      list(study_name = "study", saliva_ids = c("s1", "s2"), saliva_times = c(0, 30), study_days = 1),
+      list(sample_expected = "s1", sample_scanned = "s1", barcode_value = "001", day_expected = 1, day_scanned = 1),
+      list(sample_expected = "s1", sample_scanned = "s2", barcode_value = "002", day_expected = 1, day_scanned = 1),
+      list(sample_expected = "s1", sample_scanned = "s2", barcode_value = "unused", day_expected = 1, day_scanned = 1)
+    ),
+    source_file = rep("one.csv", 4)
+  )
+  raw <- raw[-4, ]
+  initial <- convert_raw_logs(raw, errors = "warn", create_report = TRUE)
+  expect_identical(initial$report$issues$proposed_action[initial$report$issues$code == "duplicate_scheduled_sample_events"], "reassign_to_recorded_sample")
+  decisions <- initial$report$issues
+  decisions$user_decision[decisions$code != "duplicate_scheduled_sample_events"] <- "keep"
+  final <- convert_raw_logs(raw, errors = "warn", create_report = TRUE, issue_decisions = decisions)
+  samples <- as_sample_events(final$results)
+  expect_equal(samples$barcode, c("001", "002"))
+  expect_equal(samples$recorded_sample, c("s1", "s2"))
 })
 
 test_that("a change decision sorts a complete scan series by time", {
