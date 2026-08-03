@@ -226,11 +226,12 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
       issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("missing_registration_metadata", participant), code = "missing_registration_metadata", participant = participant, day = NA_character_, sample_id = NA_character_, proposed_action = "", user_decision = "", resolution_status = "unresolved")
       next
     }
-    active_registration <- 1L
+    active_registration <- NA_integer_
     awakening_day_counter <- 0L
     current_config_key <- .registration_key(registrations[[1]])
     registration_sources <- unique(events$source_file[events$action == "study_metadata"])
     collection_started <- FALSE
+    metadata_seen <- FALSE
     for (i in seq_len(nrow(events))) {
       event <- events[i, , drop = FALSE]
       if (event$action[[1]] == "study_metadata") {
@@ -241,16 +242,32 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
           current_config_key <- new_key
           position <- which(vapply(.protocol_from_logs(raw_logs, protocol_manifest), function(item) identical(.registration_key(item), current_config_key), logical(1)))
           if (length(position)) active_registration <- position[[1]]
-        }
+          metadata_seen <- TRUE
+        } else issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("invalid_study_metadata", participant, details = list(source_file = event$source_file[[1]])), code = "invalid_study_metadata", participant = participant, day = NA_character_, sample_id = NA_character_, proposed_action = "ignore_metadata_event", user_decision = "", resolution_status = "unresolved")
         next
       }
       if (!event$action[[1]] %in% c("barcode_scanned", "spontaneous_awakening", "alarm")) next
+      if (event$action[[1]] == "barcode_scanned" && !metadata_seen) {
+        issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("scan_before_registration_metadata", participant, details = list(source_file = event$source_file[[1]])), code = "scan_before_registration_metadata", participant = participant, day = NA_character_, sample_id = NA_character_, proposed_action = "drop_sample", user_decision = "", resolution_status = "unresolved")
+        next
+      }
       if (event$action[[1]] == "barcode_scanned") collection_started <- TRUE
       if (event$action[[1]] %in% c("spontaneous_awakening", "alarm")) {
         awakening_day_counter <- awakening_day_counter + 1L
         day_row <- dplyr::filter(schedule, .data$registration == .env$active_registration, .data$registration_day == .env$awakening_day_counter)
         day <- if (nrow(day_row)) day_row$day[[1]] else NA_character_
       } else {
+        expected_day <- suppressWarnings(as.integer(.payload_value(event$payload[[1]], "day_expected", 1L)))
+        active_rows <- schedule[schedule$registration == active_registration, , drop = FALSE]
+        if (is.na(expected_day) || !expected_day %in% active_rows$registration_day) {
+          issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("invalid_day_expected", participant, details = list(day_expected = expected_day, source_file = event$source_file[[1]])), code = "invalid_day_expected", participant = participant, day = NA_character_, sample_id = NA_character_, proposed_action = "drop_sample", user_decision = "", resolution_status = "unresolved")
+          next
+        }
+        expected_sample <- as.character(.payload_value(event$payload[[1]], "sample_expected", ""))
+        if (!expected_sample %in% active_rows$scheduled_sample) {
+          issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("expected_sample_not_in_active_metadata", participant, details = list(sample_expected = expected_sample, source_file = event$source_file[[1]])), code = "expected_sample_not_in_active_metadata", participant = participant, day = NA_character_, sample_id = expected_sample, proposed_action = "override_expected_sample", user_decision = "", resolution_status = "unresolved")
+          next
+        }
         day <- .coerce_event_day(event, schedule, active_registration)
       }
       if (is.na(day)) next
@@ -265,11 +282,14 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
     awakening <- dplyr::filter(events, .data$action %in% c("spontaneous_awakening", "alarm"))
     awakening_time <- if (nrow(awakening)) awakening$timestamp[[1]] else as.POSIXct(NA)
     collection_date <- if (nrow(events)) as.Date(events$timestamp[[1]]) else as.Date(NA)
+    scan_dates <- unique(as.Date(events$timestamp[events$action == "barcode_scanned"]))
+    if (length(scan_dates) > 1L) issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("multiple_collection_dates", participant, day, details = list(dates = sort(as.character(scan_dates)))), code = "multiple_collection_dates", participant = participant, day = day, sample_id = NA_character_, proposed_action = "drop_day", user_decision = "", resolution_status = "unresolved")
     if (!nrow(awakening)) issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("missing_awakening_time", participant, day), code = "missing_awakening_time", participant = participant, day = day, sample_id = NA_character_, proposed_action = "use_manual_diary_awakening_time", user_decision = "", resolution_status = "unresolved")
     for (j in seq_len(nrow(positions))) {
       position <- positions[j, ]
       expected_match <- vapply(events$payload, function(payload) identical(as.character(.payload_value(payload, "sample_expected", "")), as.character(position$scheduled_sample)), logical(1))
       scan <- events[events$action == "barcode_scanned" & expected_match, , drop = FALSE]
+      if (nrow(scan) > 1L) issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("duplicate_scheduled_sample_events", participant, day, position$scheduled_sample, details = list(event_count = nrow(scan))), code = "duplicate_scheduled_sample_events", participant = participant, day = day, sample_id = position$scheduled_sample, proposed_action = "drop_sample", user_decision = "", resolution_status = "unresolved")
       payload <- if (nrow(scan)) scan$payload[[1]] else list()
       sampling_time <- if (nrow(scan)) scan$timestamp[[1]] else as.POSIXct(NA)
       if (!nrow(scan)) issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("missing_scheduled_sample_event", participant, day, position$scheduled_sample), code = "missing_scheduled_sample_event", participant = participant, day = day, sample_id = position$scheduled_sample, proposed_action = "use_manual_diary_sampling_time", user_decision = "", resolution_status = "unresolved")
