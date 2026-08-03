@@ -137,6 +137,34 @@ test_that("expected-sample override moves an invalid scan only after decision", 
   expect_equal(samples$recorded_sample, c("s1", "s2"))
 })
 
+test_that("collection-date decisions choose the canonical day date", {
+  timezone <- "Europe/Berlin"
+  raw <- tibble::tibble(
+    participant = rep("vp01", 4),
+    timestamp = as.POSIXct(c("2025-05-15 05:00:00", "2025-05-15 06:00:00", "2025-05-15 07:00:00", "2025-05-16 08:00:00"), tz = timezone),
+    action = c("study_metadata", "spontaneous_awakening", rep("barcode_scanned", 2)),
+    payload = list(
+      list(study_name = "study", saliva_ids = c("s1", "s2"), saliva_times = numeric(), saliva_absolute_times = c("07:00", "08:00"), study_days = 1),
+      list(id = 0),
+      list(sample_expected = "s1", sample_scanned = "s1", barcode_value = "001", day_expected = 1, day_scanned = 1),
+      list(sample_expected = "s2", sample_scanned = "s2", barcode_value = "002", day_expected = 1, day_scanned = 1)
+    ),
+    source_file = rep("one.csv", 4)
+  )
+  initial <- convert_raw_logs(raw, errors = "warn", create_report = TRUE)
+  issue <- initial$report$issues$code == "multiple_collection_dates"
+  expect_identical(initial$report$issues$proposed_action[issue], "use_earliest_collection_date")
+  expect_true(is.na(as_study_days(initial$results)$date[[1]]))
+  decisions <- initial$report$issues
+  decisions$user_decision[!issue] <- "keep"
+  decisions$user_decision[issue] <- "change"
+  decisions$user_decision_value[issue] <- "use_latest_collection_date"
+  final <- convert_raw_logs(raw, errors = "warn", create_report = TRUE, issue_decisions = decisions)
+  expect_identical(as.character(as.Date(as_study_days(final$results)$date[[1]])), "2025-05-16")
+  scheduled <- as_sample_events(final$results)$scheduled_sampling_time
+  expect_identical(format(scheduled, "%Y-%m-%d %H:%M"), c("2025-05-16 07:00", "2025-05-16 08:00"))
+})
+
 test_that("a change decision sorts a complete scan series by time", {
   timezone <- "Europe/Berlin"
   raw <- tibble::tibble(

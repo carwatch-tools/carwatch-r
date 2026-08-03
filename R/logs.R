@@ -272,6 +272,37 @@ summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("e
   .write_scan_event(long, scan, participant, day, target)
 }
 
+.apply_collection_date_decision <- function(long, event_records, schedule, item, timezone) {
+  participant <- item$participant[[1]]
+  day <- item$day[[1]]
+  scans <- event_records[
+    event_records$participant == participant & event_records$day == day &
+      event_records$action == "barcode_scanned",
+    , drop = FALSE
+  ]
+  scan_dates <- sort(unique(as.Date(scans$timestamp, tz = timezone)))
+  if (length(scan_dates) < 2L) return(long)
+  action <- item$user_decision[[1]]
+  value <- item$user_decision_value[[1]]
+  selected_date <- if (action == "accept") {
+    scan_dates[[1]]
+  } else if (action == "change" && value == "use_earliest_collection_date") {
+    scan_dates[[1]]
+  } else if (action == "change" && value == "use_latest_collection_date") {
+    scan_dates[[length(scan_dates)]]
+  } else {
+    return(long)
+  }
+  long <- .replace_long_value(long, participant, day, "day", "date", as.POSIXct(selected_date, tz = timezone))
+  positions <- schedule[schedule$day == day & schedule$schedule_type == "absolute", , drop = FALSE]
+  for (index in seq_len(nrow(positions))) {
+    position <- positions[index, , drop = FALSE]
+    timestamp <- .day_timestamp(selected_date, position$absolute_clock[[1]], timezone)
+    long <- .replace_long_value(long, participant, day, position$scheduled_sample[[1]], "scheduled_sampling_time", timestamp)
+  }
+  long
+}
+
 .apply_conversion_patches <- function(long, report, schedule, manual_diary, sampling_schedule, timezone, event_records = NULL) {
   selected <- .decision_rows(report)
   if (!nrow(selected)) return(long)
@@ -299,6 +330,9 @@ summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("e
     }
     if (item$code[[1]] == "expected_sample_not_in_active_metadata" && !is.null(event_records)) {
       long <- .apply_expected_sample_override(long, event_records, schedule, item)
+    }
+    if (item$code[[1]] == "multiple_collection_dates" && !is.null(event_records)) {
+      long <- .apply_collection_date_decision(long, event_records, schedule, item, timezone)
     }
   }
   long
@@ -415,9 +449,12 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
     events <- dplyr::filter(event_records, .data$participant == .env$participant, .data$day == .env$day)
     awakening <- dplyr::filter(events, .data$action %in% c("spontaneous_awakening", "alarm"))
     awakening_time <- if (nrow(awakening)) awakening$timestamp[[1]] else as.POSIXct(NA)
-    collection_date <- if (nrow(events)) as.Date(events$timestamp[[1]]) else as.Date(NA)
-    scan_dates <- unique(as.Date(events$timestamp[events$action == "barcode_scanned"]))
-    if (length(scan_dates) > 1L) issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("multiple_collection_dates", participant, day, details = list(dates = sort(as.character(scan_dates)))), code = "multiple_collection_dates", participant = participant, day = day, sample_id = NA_character_, proposed_action = "drop_day", user_decision = "", resolution_status = "unresolved")
+    scan_dates <- sort(unique(as.Date(events$timestamp[events$action == "barcode_scanned"], tz = timezone)))
+    collection_date <- if (length(scan_dates)) scan_dates[[1]] else if (nrow(events)) as.Date(events$timestamp[[1]], tz = timezone) else as.Date(NA)
+    if (length(scan_dates) > 1L) {
+      collection_date <- as.Date(NA)
+      issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("multiple_collection_dates", participant, day, details = list(dates = as.character(scan_dates))), code = "multiple_collection_dates", participant = participant, day = day, sample_id = NA_character_, proposed_action = "use_earliest_collection_date", user_decision = "", resolution_status = "unresolved")
+    }
     if (!nrow(awakening)) issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("missing_awakening_time", participant, day), code = "missing_awakening_time", participant = participant, day = day, sample_id = NA_character_, proposed_action = "use_manual_diary_awakening_time", user_decision = "", resolution_status = "unresolved")
     for (j in seq_len(nrow(positions))) {
       position <- positions[j, ]
