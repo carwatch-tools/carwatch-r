@@ -9,9 +9,12 @@
 #' @param correct_swaps Match physical tubes to their recorded position.
 #' @param match_on "sample"/"physical_id" or "position".
 #' @param missing_carwatch_data Whether unmatched laboratory rows are ignored or rejected.
+#' @param metadata_cols Optional laboratory columns to retain as metadata rather
+#'   than numeric measurements. Constant participant-day values are stored at
+#'   the canonical day level; values varying within a day stay sample-level.
 #' @return Complete canonical results with laboratory and merge-provenance fields.
 #' @export
-merge_saliva <- function(study_results, saliva, correct_swaps = TRUE, match_on = c("sample", "position", "physical_id"), missing_carwatch_data = c("ignore", "raise")) {
+merge_saliva <- function(study_results, saliva, correct_swaps = TRUE, match_on = c("sample", "position", "physical_id"), missing_carwatch_data = c("ignore", "raise"), metadata_cols = NULL) {
   .require_complete_results(study_results)
   .assert_scalar_logical(correct_swaps, "correct_swaps")
   match_on <- match.arg(match_on); if (identical(match_on, "physical_id")) match_on <- "sample"
@@ -20,9 +23,14 @@ merge_saliva <- function(study_results, saliva, correct_swaps = TRUE, match_on =
   saliva$participant <- .as_character_id(saliva$participant, "Saliva participant IDs")
   samples <- as_sample_events(study_results)
   known <- c("participant", "sample", "day", "sample_position")
-  measurements <- setdiff(names(saliva), known)
+  available <- setdiff(names(saliva), known)
+  if (is.null(metadata_cols)) metadata_cols <- character()
+  if (!is.character(metadata_cols) || any(!nzchar(metadata_cols)) || length(setdiff(metadata_cols, available))) .carwatch_abort("`metadata_cols` must name non-key columns in the saliva data.", "carwatch_value_error")
+  metadata_cols <- unique(metadata_cols)
+  measurements <- setdiff(available, metadata_cols)
   if (!length(measurements)) .carwatch_abort("Saliva data must contain at least one laboratory value column.", "carwatch_schema_error")
-  if (any(measurements %in% attr(study_results, "column_spec")$variable)) .carwatch_abort(sprintf("Laboratory variables already exist in Study Results: %s.", paste(intersect(measurements, attr(study_results, "column_spec")$variable), collapse = ", ")), "carwatch_schema_error")
+  supplied_variables <- c(measurements, metadata_cols)
+  if (any(supplied_variables %in% attr(study_results, "column_spec")$variable)) .carwatch_abort(sprintf("Laboratory variables already exist in Study Results: %s.", paste(intersect(supplied_variables, attr(study_results, "column_spec")$variable), collapse = ", ")), "carwatch_schema_error")
   for (measurement in measurements) {
     numeric <- suppressWarnings(as.numeric(saliva[[measurement]]))
     invalid <- !is.na(saliva[[measurement]]) & (!is.na(saliva[[measurement]]) & is.na(numeric))
@@ -72,6 +80,18 @@ merge_saliva <- function(study_results, saliva, correct_swaps = TRUE, match_on =
   }
   additions <- list()
   for (current_variable in c(measurements, "lab_value_available", "mismatch_corrected", "recorded_sample_in_schedule", "sampling_event_recorded")) additions[[length(additions) + 1L]] <- tibble::tibble(participant = matched$participant, day = matched$day, sample = matched$sample, variable = current_variable, value = as.list(matched[[current_variable]]))
+  for (metadata in metadata_cols) {
+    groups <- split(seq_len(nrow(matched)), interaction(matched$participant, matched$day, drop = TRUE, lex.order = TRUE))
+    for (indices in groups) {
+      values <- matched[[metadata]][indices]
+      observed <- unique(values[!is.na(values)])
+      if (length(observed) <= 1L) {
+        additions[[length(additions) + 1L]] <- tibble::tibble(participant = matched$participant[[indices[[1]]]], day = matched$day[[indices[[1]]]], sample = "day", variable = metadata, value = list(if (length(observed)) observed[[1]] else NA))
+      } else {
+        additions[[length(additions) + 1L]] <- tibble::tibble(participant = matched$participant[indices], day = matched$day[indices], sample = matched$sample[indices], variable = metadata, value = as.list(values))
+      }
+    }
+  }
   existing <- .results_long(study_results)
   .from_long_results(dplyr::bind_rows(existing, dplyr::bind_rows(additions)), study_results$participant)
 }

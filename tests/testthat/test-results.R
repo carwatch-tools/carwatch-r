@@ -290,6 +290,24 @@ test_that("saliva merges validate physical tubes and missing app events", {
   expect_error(merge_saliva(results, bad), "numeric")
 })
 
+test_that("saliva merge stores explicit metadata at its varying canonical level", {
+  long <- dplyr::bind_rows(lapply(c("B1", "B2"), function(sample) tibble::tibble(
+    participant = "p1", day = "D1", sample = sample,
+    variable = c("sampling_time", "recorded_sample", "sample_position"),
+    value = list(as.POSIXct("2025-05-15 06:00:00", tz = "Europe/Berlin"), sample, match(sample, c("B1", "B2")))
+  )))
+  results <- carwatch:::.from_long_results(long)
+  merged <- merge_saliva(
+    results,
+    tibble::tibble(participant = "p1", sample = c("B1", "B2"), cortisol = c(1, 2), condition = "challenge", assay_batch = c("a", "b")),
+    metadata_cols = c("condition", "assay_batch")
+  )
+  days <- as_study_days(merged); samples <- as_sample_events(merged)
+  expect_identical(days$condition, "challenge")
+  expect_equal(samples$assay_batch, c("a", "b"))
+  expect_false("condition" %in% names(samples))
+})
+
 test_that("Study Manager imports retain natural per-day sample positions", {
   path <- tempfile(fileext = ".csv")
   writeLines(c(
@@ -299,6 +317,24 @@ test_that("Study Manager imports retain natural per-day sample positions", {
   samples <- as_sample_events(read_study_manager_export(path))
   expect_identical(samples$sample, c("S1", "S2", "S10"))
   expect_identical(samples$sample_position, c(1L, 2L, 3L))
+})
+
+test_that("synthetic anomaly controls generate patchable artifacts reproducibly", {
+  first <- tempfile("carwatch-synthetic-config-")
+  second <- tempfile("carwatch-synthetic-config-")
+  args <- list(
+    n_participants = 2L, random_state = 9L, create_cortisol_data = TRUE,
+    non_compliant_sample_ratio = 2 / 16,
+    missing_awakening_time_ratio = 1 / 4,
+    missing_sampling_time_ratio = 2 / 16
+  )
+  do.call(generate_synthetic_study_data, c(list(output_dir = first), args))
+  do.call(generate_synthetic_study_data, c(list(output_dir = second), args))
+  expect_true(all(file.exists(file.path(first, c("manual_diary.csv", "issue_decisions.csv", "cortisol.csv")))))
+  expect_identical(readLines(file.path(first, "manual_diary.csv")), readLines(file.path(second, "manual_diary.csv")))
+  decisions <- read_conversion_report(file.path(first, "issue_decisions.csv"))
+  expect_true(any(decisions$code == "missing_awakening_time"))
+  expect_true(any(decisions$code == "missing_scheduled_sample_event"))
 })
 
 test_that("a collection-date mapping reassigns scans by sample position", {

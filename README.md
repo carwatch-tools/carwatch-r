@@ -214,6 +214,20 @@ merged_results <- merge_saliva(
 )
 ~~~
 
+Pass laboratory metadata explicitly through `metadata_cols`. A value that is
+constant for a participant-day is retained as a day-level canonical variable;
+a value that varies by tube stays sample-level. This is the R replacement for
+Python pandas index-level metadata.
+
+~~~r
+merged_results <- merge_saliva(
+  study_results,
+  saliva_by_position,
+  match_on = "position",
+  metadata_cols = "condition"
+)
+~~~
+
 The result remains complete canonical Study Results and includes laboratory
 availability, recorded-sample, and swap-correction provenance.
 
@@ -246,12 +260,18 @@ Generate deterministic local example data:
 path <- generate_synthetic_study_data(
   "carwatch-example",
   n_participants = 4,
-  random_state = 42
+  random_state = 42,
+  non_compliant_sample_ratio = 0.10,
+  missing_awakening_time_ratio = 0.01,
+  missing_sampling_time_ratio = 0.02,
+  create_cortisol_data = TRUE
 )
 ~~~
 
-The generated directory contains raw logs and a cortisol CSV suitable for the
-workflow above.
+The generated directory contains raw logs, `manual_diary.csv`, a ready-to-submit
+`issue_decisions.csv`, and—when requested—position-indexed `cortisol.csv`.
+Generation validates the advisory and submitted-decision conversion workflow by
+default.
 
 ## Citation
 

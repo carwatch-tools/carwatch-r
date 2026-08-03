@@ -9,7 +9,8 @@ merge_saliva(
   saliva,
   correct_swaps = TRUE,
   match_on = c("sample", "position", "physical_id"),
-  missing_carwatch_data = c("ignore", "raise")
+  missing_carwatch_data = c("ignore", "raise"),
+  metadata_cols = NULL
 )
 }
 \arguments{
@@ -22,6 +23,10 @@ merge_saliva(
 \item{match_on}{"sample"/"physical_id" or "position".}
 
 \item{missing_carwatch_data}{Whether unmatched laboratory rows are ignored or rejected.}
+
+\item{metadata_cols}{Optional laboratory columns to retain as metadata rather
+than numeric measurements. Constant participant-day values are stored at
+the canonical day level; values varying within a day stay sample-level.}
 }
 \value{
 Complete canonical results with laboratory and merge-provenance fields.
