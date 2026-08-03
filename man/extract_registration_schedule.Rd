@@ -7,7 +7,7 @@
 extract_registration_schedule(
   raw_logs,
   protocol_manifest = NULL,
-  errors = c("error", "warn")
+  errors = c("raise", "warn", "error")
 )
 }
 \arguments{

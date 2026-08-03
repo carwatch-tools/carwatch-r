@@ -7,7 +7,7 @@
 summarize_protocol(
   raw_logs,
   protocol_manifest = NULL,
-  errors = c("error", "warn")
+  errors = c("raise", "warn", "error")
 )
 }
 \arguments{

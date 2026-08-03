@@ -14,20 +14,23 @@ Implemented and locally tested:
   exports, mismatch exclusions, and source audits.
 - Canonical three-header Study Results read/write, flat Study Manager imports,
   display-only protection, canonical variable ordering, and typed restoration.
-- Registration-aware standard conversion with raw-event de-duplication and
-  provenance, re-registration reporting, two-pass issue-report IDs, validated
-  decisions, scope-drop decisions, compliance summaries, saliva merging,
-  response features, synthetic data, and static plots.
+- Registration-aware standard conversion with raw-event de-duplication,
+  registration-epoch source provenance, strict ambiguous/cyclic/backwards
+  protocol-order checks, manifest validation, re-registration reporting, and
+  canonical schedule reconstruction.
+- Two-pass conversion reports with deterministic issue IDs, stale-decision
+  rejection, scope drops, re-registration overrides, collection-date mapping,
+  scan-time ordering, manual-diary patches, and relative/absolute fallback
+  schedules.
+- Compliance summaries, saliva merging with physical-tube and positional swap
+  correction, response features, synthetic data, and static plots.
 
 Required before claiming Python 1.0 parity:
 
-- Full registration-epoch reconstruction across ambiguous cohort order,
-  manifests, re-registration reassignment, and missing registrations.
-- Complete conversion decision semantics: every issue context, cross-language
-  issue-ID equivalence, supersession, manual-diary patches, and all change
-  actions.
-- Python merge metadata/index-level semantics and the complete synthetic-data
-  configuration surface.
+- Exact Python 1.0.0 conversion-report identity/message/context equivalence,
+  including occurrence suffixes and all supersession cases.
+- Full Python merge metadata/index-level semantics and the complete
+  synthetic-data configuration surface.
 - Shiny/DT timeline and conversion-report editor.
-- Translation of the remaining Python behavioral suite and differential CI on
-  macOS, Linux, and Windows.
+- Translation of the remaining Python behavioral suite, versioned differential
+  fixtures for each path, and CI on macOS, Linux, and Windows.

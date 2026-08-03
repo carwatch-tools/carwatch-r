@@ -118,9 +118,11 @@ study_results <- final$results
 ~~~
 
 The implemented report workflow validates supported decisions and scope-drop
-decisions. Full Python-equivalent supersession, manual-diary patches, and all
-change actions remain parity work; consult [PORT_STATUS.md](PORT_STATUS.md)
-before using those paths.
+decisions. Supported second-pass actions include `accept`, `keep`,
+`drop_sample`, `drop_day`, `drop_participant`, `override_expected_sample`, and
+the documented `change` actions for re-registration, collection-date mapping,
+scan-time ordering, schedule fallback, and manual-diary timestamps. Decisions
+are validated against the regenerated report; stale IDs are rejected.
 
 Inspect protocol reconstruction where needed:
 
@@ -128,6 +130,12 @@ Inspect protocol reconstruction where needed:
 summarize_protocol(raw_logs)
 extract_registration_schedule(raw_logs)
 ~~~
+
+Without an explicit `protocol_manifest`, schedule extraction rejects ambiguous,
+cyclic, or backwards observed registration orders in strict mode. Use
+`errors = "warn"` only to inspect the cohort-derived canonical schedule and
+its conversion-report provenance. Provide an ordered manifest for a deliberate
+protocol definition.
 
 ### 4. Inspect and save complete Study Results
 
@@ -228,7 +236,7 @@ plot_saliva_curve(merged_results, value = "cortisol")
 
 For generic long-format saliva data, use compute_features, auc, max_value,
 initial_value, max_increase, or slope. Interactive Shiny/DT tools are planned
-and not part of this release.
+and intentionally excluded from this noninteractive port.
 
 ## Synthetic data
 
