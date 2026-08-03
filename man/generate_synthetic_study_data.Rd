@@ -8,9 +8,13 @@ generate_synthetic_study_data(
   output_dir,
   study_config = NULL,
   n_participants = 4L,
+  non_compliant_sample_ratio = 0.1,
+  missing_awakening_time_ratio = 0.01,
+  missing_sampling_time_ratio = 0.02,
   random_state = 42L,
+  create_cortisol_data = FALSE,
   overwrite = FALSE,
-  ...
+  validate = TRUE
 )
 }
 \arguments{
@@ -21,12 +25,28 @@ generate_synthetic_study_data(
 
 \item{n_participants}{Number of generated participants.}
 
-\item{random_state}{Seed for deterministic output.}
+\item{non_compliant_sample_ratio}{Proportion of observed samples with timing
+deliberately outside the default compliance tolerance.}
+
+\item{missing_awakening_time_ratio}{Proportion of participant-days with a
+missing awakening event and first sample.}
+
+\item{missing_sampling_time_ratio}{Proportion of expected samples omitted
+from raw logs, including omissions caused by missing awakenings.}
+
+\item{random_state}{Integer seed, or \code{NULL} for an unseeded generation.}
+
+\item{create_cortisol_data}{Whether to create position-indexed \code{cortisol.csv}.}
 
 \item{overwrite}{Whether an existing target directory may be replaced.}
 
-\item{...}{Reserved parity controls for non-compliance and missing events.}
+\item{validate}{Run advisory and submitted-decision conversion after writing.}
+}
+\value{
+The normalized output directory path.
 }
 \description{
-Generate deterministic local CARWatch example data
+Generated anomalies are represented by ordinary raw-log omissions and a
+matching manual diary/decision report. The source events themselves are
+never patched.
 }
