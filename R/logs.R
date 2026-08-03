@@ -144,6 +144,23 @@
   issues
 }
 
+.manifest_registration_missing_issues <- function(raw_logs, protocol_manifest) {
+  if (is.null(protocol_manifest)) return(list())
+  protocol <- .protocol_from_logs(raw_logs, protocol_manifest)
+  protocol_keys <- vapply(protocol, .registration_key, character(1))
+  metadata <- raw_logs[raw_logs$action == "study_metadata", , drop = FALSE]
+  observed <- lapply(metadata$payload, .registration_config)
+  observed_keys <- vapply(observed, function(config) if (is.null(config)) NA_character_ else .registration_key(config), character(1))
+  issues <- list()
+  for (participant in sort(unique(as.character(raw_logs$participant)))) {
+    participant_keys <- unique(observed_keys[metadata$participant == participant])
+    for (registration in which(!protocol_keys %in% participant_keys)) {
+      issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("manifest_registration_missing", participant, details = list(registration = registration)), code = "manifest_registration_missing", participant = participant, day = NA_character_, sample_id = NA_character_, proposed_action = "keep_missing_registration", user_decision = "", resolution_status = "unresolved")
+    }
+  }
+  issues
+}
+
 #' Extract the registration-aware protocol schedule
 #' @param raw_logs Immutable events returned by [read_raw_logs()].
 #' @param protocol_manifest Optional ordered registration configuration.
@@ -533,7 +550,7 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
   participants <- sort(unique(.as_character_id(raw_logs$participant, "Raw-log participant IDs")))
   timezone <- attr(raw_logs$timestamp, "tzone") %||% "Europe/Berlin"
   metadata <- raw_logs[raw_logs$action == "study_metadata", , drop = FALSE]
-  issues <- .protocol_order_issues(raw_logs, protocol_manifest); records <- list()
+  issues <- c(.protocol_order_issues(raw_logs, protocol_manifest), .manifest_registration_missing_issues(raw_logs, protocol_manifest)); records <- list()
   for (participant in participants) {
     events <- dplyr::arrange(dplyr::filter(raw_logs, .data$participant == .env$participant), .data$timestamp)
     registrations <- lapply(events$payload[events$action == "study_metadata"], .registration_config)

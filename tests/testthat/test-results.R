@@ -288,6 +288,28 @@ test_that("ambiguous and cyclic cohort protocol orders are reported", {
   expect_true(any(cyclic_report$issues$code == "cyclic_protocol_order"))
 })
 
+test_that("manifest registrations missing for a participant are reported", {
+  timezone <- "Europe/Berlin"
+  raw <- tibble::tibble(
+    participant = c("vp01", "vp01"),
+    timestamp = as.POSIXct(c("2025-05-15 05:00:00", "2025-05-15 06:00:00"), tz = timezone),
+    action = c("study_metadata", "barcode_scanned"),
+    payload = list(
+      list(study_name = "first", saliva_ids = "a", saliva_times = 0, study_days = 1),
+      list(sample_expected = "a", sample_scanned = "a", barcode_value = "001", day_expected = 1, day_scanned = 1)
+    ),
+    source_file = c("one.csv", "one.csv")
+  )
+  manifest <- list(
+    list(study_name = "first", saliva_ids = "a", saliva_times = 0, study_days = 1),
+    list(study_name = "second", saliva_ids = "b", saliva_times = 0, study_days = 1)
+  )
+  report <- convert_raw_logs(raw, protocol_manifest = manifest, errors = "warn", create_report = TRUE)$report
+  missing <- report$issues[report$issues$code == "manifest_registration_missing", , drop = FALSE]
+  expect_equal(nrow(missing), 1L)
+  expect_identical(missing$participant[[1]], "vp01")
+})
+
 test_that("a change decision sorts a complete scan series by time", {
   timezone <- "Europe/Berlin"
   raw <- tibble::tibble(
