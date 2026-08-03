@@ -290,6 +290,17 @@ test_that("saliva merges validate physical tubes and missing app events", {
   expect_error(merge_saliva(results, bad), "numeric")
 })
 
+test_that("Study Manager imports retain natural per-day sample positions", {
+  path <- tempfile(fileext = ".csv")
+  writeLines(c(
+    "Participant ID,date_D1,sampling_time_D1_S10,sample_barcode_D1_S10,sample_scanned_D1_S10,sampling_time_D1_S2,sample_barcode_D1_S2,sample_scanned_D1_S2,sampling_time_D1_S1,sample_barcode_D1_S1,sample_scanned_D1_S1",
+    "p1,2025-05-15,08:00:00,c10,S10,07:00:00,c2,S2,06:00:00,c1,S1"
+  ), path)
+  samples <- as_sample_events(read_study_manager_export(path))
+  expect_identical(samples$sample, c("S1", "S2", "S10"))
+  expect_identical(samples$sample_position, c(1L, 2L, 3L))
+})
+
 test_that("a collection-date mapping reassigns scans by sample position", {
   timezone <- "Europe/Berlin"
   raw <- tibble::tibble(

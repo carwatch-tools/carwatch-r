@@ -72,7 +72,13 @@ utils::globalVariables(c(".data", ".env"))
 }
 
 .natural_order <- function(x) {
-  order(tolower(gsub("([0-9]+)", sprintf("%010d", as.integer(gsub("[^0-9]", "", x))), x)), na.last = TRUE)
+  key <- vapply(as.character(x), function(value) {
+    tokens <- strsplit(tolower(value), "(?<=[^0-9])(?=[0-9])|(?<=[0-9])(?=[^0-9])", perl = TRUE)[[1]]
+    paste(vapply(tokens, function(token) {
+      if (grepl("^[0-9]+$", token)) sprintf("%020d", suppressWarnings(as.numeric(token))) else token
+    }, character(1)), collapse = "")
+  }, character(1))
+  order(key, as.character(x), method = "radix", na.last = TRUE)
 }
 
 .is_false <- function(x) is.logical(x) && !is.na(x) && !x

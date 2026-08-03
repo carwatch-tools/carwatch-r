@@ -152,11 +152,14 @@ read_study_manager_export <- function(path, tz = "Europe/Berlin") {
     awakening_type <- value(row, paste0("awakening_type_d", number)); if (!is.na(awakening_type)) awakening_type <- switch(awakening_type, "self-report" = "spontaneous_awakening", "manual" = "manual_diary", awakening_type)
     add("day", "awakening_type", awakening_type)
     add("day", "mismatch_summary", value(row, paste0("sample_mismatches_d", number)))
-    samples <- sort(unique(vapply(Filter(function(item) item$day == number, layout), `[[`, character(1), "sample")), method = "radix")
-    for (sample in samples) {
+    samples <- unique(vapply(Filter(function(item) item$day == number, layout), `[[`, character(1), "sample"))
+    samples <- samples[.natural_order(samples)]
+    for (position in seq_along(samples)) {
+      sample <- samples[[position]]
       add(sample, "sampling_time", date_time(date, value(row, paste0("sampling_time_d", number, "_", sample)), "sampling time"))
       add(sample, "barcode", value(row, paste0("sample_barcode_d", number, "_", sample)))
       add(sample, "recorded_sample", value(row, paste0("sample_scanned_d", number, "_", sample)))
+      add(sample, "sample_position", as.integer(position))
     }
   }
   .from_long_results(dplyr::bind_rows(long), participant)
