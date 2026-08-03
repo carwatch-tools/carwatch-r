@@ -213,6 +213,45 @@ test_that("use_default uses the supplied fallback schedule only when needed", {
   expect_identical(second$sampling_time_source[[1]], "schedule")
 })
 
+test_that("registration schedule rejects ambiguous cohort order unless warned", {
+  raw <- tibble::tibble(
+    participant = c("p1", "p1", "p2", "p2"),
+    timestamp = as.POSIXct(c("2025-05-15 05:00:00", "2025-05-15 06:00:00", "2025-05-16 05:00:00", "2025-05-16 06:00:00"), tz = "Europe/Berlin"),
+    action = "study_metadata",
+    payload = list(
+      list(saliva_ids = "first"), list(saliva_ids = "second"),
+      list(saliva_ids = "second"), list(saliva_ids = "first")
+    ),
+    source_file = c("p1-first.csv", "p1-second.csv", "p2-second.csv", "p2-first.csv")
+  )
+  expect_error(extract_registration_schedule(raw), "ambiguous")
+  expect_warning(schedule <- extract_registration_schedule(raw, errors = "warn"), "ambiguous")
+  expect_identical(unique(schedule$day), c("D1", "D2"))
+})
+
+test_that("registration-order violations retain the canonical schedule and audit sources", {
+  raw <- tibble::tibble(
+    participant = rep("p1", 3),
+    timestamp = as.POSIXct(c("2025-05-15 05:00:00", "2025-05-16 05:00:00", "2025-05-17 05:00:00"), tz = "Europe/Berlin"),
+    action = "study_metadata",
+    payload = list(
+      list(study_name = "first", saliva_ids = "first-1"),
+      list(study_name = "second", saliva_ids = "second-1"),
+      list(study_name = "first", saliva_ids = "first-1")
+    ),
+    source_file = c("first.csv", "second.csv", "first-again.csv")
+  )
+  expect_error(extract_registration_schedule(raw), "do not create an additional")
+  expect_warning(schedule <- extract_registration_schedule(raw, errors = "warn"), "do not create an additional")
+  expect_identical(unique(schedule$day), c("D1", "D2"))
+  converted <- convert_raw_logs(raw, errors = "warn", create_report = TRUE, check_compliance = FALSE)
+  issue <- converted$report$issues[converted$report$issues$code == "registration_order_violation", , drop = FALSE]
+  expect_equal(nrow(issue), 1L)
+  details <- jsonlite::fromJSON(issue$details[[1]], simplifyVector = FALSE)
+  expect_identical(details$current$metadata_source_files, "first-again.csv")
+  expect_identical(details$previous$metadata_source_files, "second.csv")
+})
+
 test_that("a collection-date mapping reassigns scans by sample position", {
   timezone <- "Europe/Berlin"
   raw <- tibble::tibble(

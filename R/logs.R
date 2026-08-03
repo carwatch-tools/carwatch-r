@@ -144,6 +144,70 @@
   issues
 }
 
+.registration_order_violation_issues <- function(raw_logs, protocol_manifest = NULL) {
+  protocol <- .protocol_from_logs(raw_logs, protocol_manifest)
+  protocol_keys <- vapply(protocol, .registration_key, character(1))
+  metadata <- raw_logs[raw_logs$action == "study_metadata", , drop = FALSE]
+  if (!nrow(metadata)) return(list())
+  metadata <- dplyr::arrange(metadata, .data$participant, .data$timestamp, .data$source_file)
+  issues <- list()
+  for (participant in unique(as.character(metadata$participant))) {
+    events <- metadata[metadata$participant == participant, , drop = FALSE]
+    observed <- lapply(events$payload, .registration_config)
+    keys <- vapply(observed, function(config) if (is.null(config)) NA_character_ else .registration_key(config), character(1))
+    registration <- match(keys, protocol_keys)
+    valid <- !is.na(registration)
+    if (sum(valid) < 2L) next
+    previous_index <- NA_integer_
+    for (index in which(valid)) {
+      if (!is.na(previous_index) && registration[[index]] < registration[[previous_index]]) {
+        current <- observed[[index]]
+        previous <- observed[[previous_index]]
+        details <- list(
+          observed_registrations = as.integer(registration[valid]),
+          previous = list(
+            registration = as.integer(registration[[previous_index]]),
+            study_name = previous$study_name,
+            saliva_ids = previous$saliva_ids,
+            timestamp = format(events$timestamp[[previous_index]], "%Y-%m-%dT%H:%M:%S%z"),
+            metadata_source_files = sort(unique(events$source_file[[previous_index]]))
+          ),
+          current = list(
+            registration = as.integer(registration[[index]]),
+            study_name = current$study_name,
+            saliva_ids = current$saliva_ids,
+            timestamp = format(events$timestamp[[index]], "%Y-%m-%dT%H:%M:%S%z"),
+            metadata_source_files = sort(unique(events$source_file[[index]]))
+          )
+        )
+        issues[[length(issues) + 1L]] <- tibble::tibble(
+          issue_id = .issue_id("registration_order_violation", participant, details = details),
+          code = "registration_order_violation", participant = participant,
+          day = NA_character_, sample_id = NA_character_,
+          proposed_action = "reuse_registration", user_decision = "",
+          resolution_status = "unresolved", details = list(details)
+        )
+      }
+      previous_index <- index
+    }
+  }
+  issues
+}
+
+.protocol_issue_message <- function(issue) {
+  code <- issue$code[[1]]
+  if (code == "ambiguous_protocol_order") {
+    return("Cohort registration order is ambiguous; provide `protocol_manifest` to define the canonical order.")
+  }
+  if (code == "cyclic_protocol_order") {
+    return("Cohort registration order contains a cycle; provide `protocol_manifest` to define the canonical order.")
+  }
+  if (code == "registration_order_violation") {
+    return("A metadata registration was recorded after a later canonical registration. Retain the cohort-derived canonical order and do not create an additional canonical study day.")
+  }
+  code
+}
+
 .manifest_registration_missing_issues <- function(raw_logs, protocol_manifest) {
   if (is.null(protocol_manifest)) return(list())
   protocol <- .protocol_from_logs(raw_logs, protocol_manifest)
@@ -167,9 +231,16 @@
 #' @param errors Unresolved-issue handling: "raise", "warn", or legacy "error".
 #' @return A tibble with registration-aware sample positions.
 #' @export
-extract_registration_schedule <- function(raw_logs, protocol_manifest = NULL, errors = c("error", "warn")) {
-  errors <- match.arg(errors)
+extract_registration_schedule <- function(raw_logs, protocol_manifest = NULL, errors = c("raise", "warn", "error")) {
+  errors <- match.arg(errors); if (identical(errors, "error")) errors <- "raise"
   .require_columns(raw_logs, c("participant", "timestamp", "action", "payload", "source_file"), "Raw logs")
+  raw_logs <- .deduplicate_raw_events(raw_logs)
+  issues <- c(.protocol_order_issues(raw_logs, protocol_manifest), .registration_order_violation_issues(raw_logs, protocol_manifest))
+  if (length(issues)) {
+    messages <- vapply(issues, .protocol_issue_message, character(1))
+    if (errors == "raise") .carwatch_abort(messages[[1]], "carwatch_schema_error")
+    warning(paste(messages, collapse = " "), call. = FALSE)
+  }
   .registration_schedule(raw_logs, protocol_manifest)
 }
 
@@ -179,7 +250,7 @@ extract_registration_schedule <- function(raw_logs, protocol_manifest = NULL, er
 #' @param errors Unresolved-issue handling.
 #' @return A registration-level tibble.
 #' @export
-summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("error", "warn")) {
+summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("raise", "warn", "error")) {
   schedule <- extract_registration_schedule(raw_logs, protocol_manifest, errors)
   dplyr::summarise(dplyr::group_by(schedule, .data$registration, .data$study_name), canonical_days = list(unique(.data$day)), study_days = dplyr::n_distinct(.data$day), saliva_ids = list(unique(.data$scheduled_sample)), sample_positions = dplyr::n_distinct(.data$sample_position), .groups = "drop")
 }
@@ -584,7 +655,11 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
   participants <- sort(unique(.as_character_id(raw_logs$participant, "Raw-log participant IDs")))
   timezone <- attr(raw_logs$timestamp, "tzone") %||% "Europe/Berlin"
   metadata <- raw_logs[raw_logs$action == "study_metadata", , drop = FALSE]
-  issues <- c(.protocol_order_issues(raw_logs, protocol_manifest), .manifest_registration_missing_issues(raw_logs, protocol_manifest)); records <- list()
+  issues <- c(
+    .protocol_order_issues(raw_logs, protocol_manifest),
+    .registration_order_violation_issues(raw_logs, protocol_manifest),
+    .manifest_registration_missing_issues(raw_logs, protocol_manifest)
+  ); records <- list()
   for (participant in participants) {
     events <- dplyr::arrange(dplyr::filter(raw_logs, .data$participant == .env$participant), .data$timestamp)
     registrations <- lapply(events$payload[events$action == "study_metadata"], .registration_config)
@@ -739,13 +814,15 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
     long <- dplyr::bind_rows(long, dplyr::bind_rows(day_additions)); results <- .from_long_results(long, participants)
   }
   issue_frame <- if (length(issues)) dplyr::bind_rows(issues) else tibble::tibble(issue_id = character(), code = character(), participant = character(), day = character(), sample_id = character(), proposed_action = character(), user_decision = character(), resolution_status = character())
+  if (!"details" %in% names(issue_frame)) issue_frame$details <- rep(list(list()), nrow(issue_frame))
   # Reissue the discovered anomalies through the stable report model. The
   # default `accept` cells are advisory; only rows supplied through
   # `issue_decisions` count as executable decisions.
   if (nrow(issue_frame)) for (row in seq_len(nrow(issue_frame))) {
     item <- issue_frame[row, , drop = FALSE]
     context <- schedule[schedule$day == item$day[[1]] & schedule$scheduled_sample == item$sample_id[[1]], , drop = FALSE]
-    added <- .report_add_issue(report_state, code = item$code[[1]], message = item$code[[1]], participant = item$participant[[1]], day = item$day[[1]], sample_id = item$sample_id[[1]], registration = if (nrow(context)) context$registration[[1]] else NA_integer_, registration_day = if (nrow(context)) context$registration_day[[1]] else NA_integer_, sample_position = if (nrow(context)) context$sample_position[[1]] else NA_integer_, proposed_action = item$proposed_action[[1]])
+    details <- item$details[[1]] %||% list()
+    added <- .report_add_issue(report_state, code = item$code[[1]], message = .protocol_issue_message(item), participant = item$participant[[1]], day = item$day[[1]], sample_id = item$sample_id[[1]], registration = if (nrow(context)) context$registration[[1]] else NA_integer_, registration_day = if (nrow(context)) context$registration_day[[1]] else NA_integer_, sample_position = if (nrow(context)) context$sample_position[[1]] else NA_integer_, details = details, proposed_action = item$proposed_action[[1]])
     report_state <- added$report
   }
   if (!is.null(decision_frame) && nrow(report_state$issues)) {
