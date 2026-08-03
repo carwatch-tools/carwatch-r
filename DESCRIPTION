@@ -3,6 +3,8 @@ Title: Registration-Aware Processing of CARWatch Sampling Logs and Saliva Data
 Version: 0.0.0.9000
 Authors@R: 
     person("Robert", "Richer", email = "robert.richer@fau.de", role = c("aut", "cre"))
+Author: Robert Richer [aut, cre]
+Maintainer: Robert Richer <robert.richer@fau.de>
 Description: Reconstruct CARWatch registrations from immutable app logs,
     review conversion anomalies through an auditable two-pass workflow, and
     combine sampling-compliance information with saliva biomarkers.
