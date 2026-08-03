@@ -321,6 +321,63 @@ summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("e
   long
 }
 
+.clear_scan_event <- function(long, participant, day, sample) {
+  values <- list(
+    sampling_time = as.POSIXct(NA), barcode = NA_character_,
+    recorded_sample = NA_character_, sampling_time_source = NA_character_,
+    day_expected = NA_integer_, day_scanned = NA_integer_
+  )
+  for (variable in names(values)) long <- .replace_long_value(long, participant, day, sample, variable, values[[variable]])
+  long
+}
+
+.apply_collection_date_mapping <- function(long, event_records, schedule, item, timezone) {
+  if (item$user_decision[[1]] != "change") return(long)
+  participant <- item$participant[[1]]
+  source_day <- item$day[[1]]
+  scans <- event_records[
+    event_records$participant == participant & event_records$day == source_day &
+      event_records$action == "barcode_scanned",
+    , drop = FALSE
+  ]
+  scan_dates <- sort(unique(as.character(as.Date(scans$timestamp, tz = timezone))))
+  value <- item$user_decision_value[[1]]
+  if (value %in% c("use_earliest_collection_date", "use_latest_collection_date")) return(long)
+  mapping <- tryCatch(jsonlite::fromJSON(value, simplifyVector = FALSE), error = function(error) NULL)
+  valid_mapping <- is.list(mapping) && !is.null(names(mapping)) && all(vapply(mapping, function(entry) length(entry) == 1L && is.atomic(entry), logical(1)))
+  if (!valid_mapping) .carwatch_abort("Collection-date reassignment must be a JSON date-to-day object.", "carwatch_value_error")
+  mapping <- vapply(mapping, as.character, character(1))
+  if (!setequal(names(mapping), scan_dates) || anyDuplicated(names(mapping))) .carwatch_abort(sprintf("Collection-date reassignment must define every reported date exactly once: expected_dates=%s, supplied_dates=%s.", paste(scan_dates, collapse = ","), paste(names(mapping), collapse = ",")), "carwatch_value_error")
+  if (anyDuplicated(unname(mapping))) .carwatch_abort("Collection-date reassignment requires distinct canonical target days.", "carwatch_value_error")
+  available_days <- unique(schedule$day)
+  if (length(setdiff(unname(mapping), available_days))) .carwatch_abort("Collection-date reassignment references an unknown canonical day.", "carwatch_value_error")
+  source_positions <- schedule[schedule$day == source_day, c("scheduled_sample", "sample_position"), drop = FALSE]
+  source_positions <- source_positions[order(source_positions$sample_position), , drop = FALSE]
+  for (sample in source_positions$scheduled_sample) long <- .clear_scan_event(long, participant, source_day, sample)
+  for (collection_date in names(mapping)) {
+    target_day <- mapping[[collection_date]]
+    target_positions <- schedule[schedule$day == target_day, c("scheduled_sample", "sample_position", "schedule_type", "absolute_clock"), drop = FALSE]
+    target_positions <- target_positions[order(target_positions$sample_position), , drop = FALSE]
+    if (nrow(source_positions) != nrow(target_positions)) .carwatch_abort(sprintf("Collection-date reassignment requires compatible source and target sampling schedules: source_day=%s, target_day=%s.", source_day, target_day), "carwatch_value_error")
+    date_scans <- scans[as.character(as.Date(scans$timestamp, tz = timezone)) == collection_date, , drop = FALSE]
+    for (index in seq_len(nrow(date_scans))) {
+      event <- date_scans[index, , drop = FALSE]
+      source_sample <- as.character(.payload_value(event$payload[[1]], "sample_expected", ""))
+      source_position <- source_positions$sample_position[match(source_sample, source_positions$scheduled_sample)]
+      if (is.na(source_position)) .carwatch_abort(sprintf("Collection-date reassignment cannot resolve scheduled sample %s.", shQuote(source_sample)), "carwatch_value_error")
+      target_sample <- target_positions$scheduled_sample[match(source_position, target_positions$sample_position)]
+      long <- .write_scan_event(long, event, participant, target_day, target_sample)
+    }
+    long <- .replace_long_value(long, participant, target_day, "day", "date", as.POSIXct(as.Date(collection_date), tz = timezone))
+    absolute <- target_positions[target_positions$schedule_type == "absolute", , drop = FALSE]
+    for (index in seq_len(nrow(absolute))) {
+      position <- absolute[index, , drop = FALSE]
+      long <- .replace_long_value(long, participant, target_day, position$scheduled_sample[[1]], "scheduled_sampling_time", .day_timestamp(as.Date(collection_date), position$absolute_clock[[1]], timezone))
+    }
+  }
+  long
+}
+
 .apply_conversion_patches <- function(long, report, schedule, manual_diary, sampling_schedule, timezone, event_records = NULL) {
   selected <- .decision_rows(report)
   if (!nrow(selected)) return(long)
@@ -356,6 +413,7 @@ summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("e
     }
     if (item$code[[1]] == "multiple_collection_dates" && !is.null(event_records)) {
       long <- .apply_collection_date_decision(long, event_records, schedule, item, timezone)
+      long <- .apply_collection_date_mapping(long, event_records, schedule, item, timezone)
     }
   }
   long

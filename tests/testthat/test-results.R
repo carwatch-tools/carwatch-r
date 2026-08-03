@@ -213,6 +213,35 @@ test_that("use_default uses the supplied fallback schedule only when needed", {
   expect_identical(second$sampling_time_source[[1]], "schedule")
 })
 
+test_that("a collection-date mapping reassigns scans by sample position", {
+  timezone <- "Europe/Berlin"
+  raw <- tibble::tibble(
+    participant = rep("vp01", 6),
+    timestamp = as.POSIXct(c("2025-05-15 05:00:00", "2025-05-15 06:00:00", "2025-05-15 06:10:00", "2025-05-16 06:20:00", "2025-05-17 05:00:00", "2025-05-17 06:00:00"), tz = timezone),
+    action = c("study_metadata", "spontaneous_awakening", "barcode_scanned", "barcode_scanned", "study_metadata", "spontaneous_awakening"),
+    payload = list(
+      list(study_name = "source", saliva_ids = c("s1", "s2"), saliva_times = c(0, 30), study_days = 1),
+      list(id = 0),
+      list(sample_expected = "s1", sample_scanned = "s1", barcode_value = "001", day_expected = 1, day_scanned = 1),
+      list(sample_expected = "s2", sample_scanned = "s2", barcode_value = "002", day_expected = 1, day_scanned = 1),
+      list(study_name = "target", saliva_ids = c("t1", "t2"), saliva_times = c(0, 30), study_days = 1),
+      list(id = 0)
+    ),
+    source_file = rep("one.csv", 6)
+  )
+  initial <- convert_raw_logs(raw, errors = "warn", create_report = TRUE)
+  decisions <- initial$report$issues
+  mapping_issue <- decisions$code == "multiple_collection_dates"
+  decisions$user_decision[!mapping_issue] <- "keep"
+  decisions$user_decision[mapping_issue] <- "change"
+  decisions$user_decision_value[mapping_issue] <- '{"2025-05-15":"D1","2025-05-16":"D2"}'
+  final <- convert_raw_logs(raw, errors = "warn", create_report = TRUE, issue_decisions = decisions)
+  samples <- as_sample_events(final$results)
+  expect_identical(samples$barcode[samples$day == "D1" & samples$sample == "s1"], "001")
+  expect_true(is.na(samples$sampling_time[samples$day == "D1" & samples$sample == "s2"]))
+  expect_identical(samples$barcode[samples$day == "D2" & samples$sample == "t2"], "002")
+})
+
 test_that("a change decision sorts a complete scan series by time", {
   timezone <- "Europe/Berlin"
   raw <- tibble::tibble(
