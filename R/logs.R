@@ -11,6 +11,29 @@
   trimws(as.character(unlist(value, use.names = FALSE)))
 }
 
+# Report messages are an audit interface shared with the Python release.
+# Keep this separate from JSON serialization: Python f-string ``!r`` uses
+# single-quoted representations, whereas JSON correctly uses double quotes.
+.python_repr <- function(value) {
+  if (is.null(value) || (length(value) == 1L && is.na(value))) return("None")
+  if (inherits(value, "POSIXt")) return(paste0("'", .json_safe(value), "'"))
+  if (is.character(value)) return(paste0("[", paste(paste0("'", gsub("'", "\\\\'", value, fixed = TRUE), "'"), collapse = ", "), "]"))
+  if (is.numeric(value) || is.integer(value)) return(paste0("[", paste(as.character(value), collapse = ", "), "]"))
+  if (is.logical(value)) return(paste0("[", paste(ifelse(value, "True", "False"), collapse = ", "), "]"))
+  if (is.list(value)) {
+    if (is.null(names(value))) return(paste0("[", paste(vapply(value, .python_repr, character(1)), collapse = ", "), "]"))
+    return(paste0("{", paste(sprintf("'%s': %s", names(value), vapply(value, .python_repr, character(1))), collapse = ", "), "}"))
+  }
+  paste0("'", as.character(value), "'")
+}
+
+.python_scalar_repr <- function(value) {
+  result <- .python_repr(value)
+  if (is.character(value) && length(value) == 1L) return(sub("^\\[(.*)\\]$", "\\1", result))
+  if ((is.numeric(value) || is.integer(value) || is.logical(value)) && length(value) == 1L) return(sub("^\\[(.*)\\]$", "\\1", result))
+  result
+}
+
 .registration_config <- function(payload) {
   ids <- .payload_sequence(.payload_value(payload, "saliva_ids"))
   if (!length(ids)) return(NULL)
@@ -126,7 +149,18 @@
   precedes <- matrix(0L, nrow = length(unique_keys), ncol = length(unique_keys), dimnames = list(unique_keys, unique_keys))
   for (sequence in sequences) if (length(sequence) > 1L) for (left in seq_along(sequence)) if (left < length(sequence)) for (right in (left + 1L):length(sequence)) precedes[sequence[[left]], sequence[[right]]] <- precedes[sequence[[left]], sequence[[right]]] + 1L
   issues <- list()
-  for (left in seq_len(nrow(precedes) - 1L)) for (right in (left + 1L):ncol(precedes)) if (precedes[left, right] == precedes[right, left] && precedes[left, right] > 0L) issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("ambiguous_protocol_order", "__cohort__", details = list(left = rownames(precedes)[[left]], right = rownames(precedes)[[right]])), code = "ambiguous_protocol_order", participant = "__cohort__", day = NA_character_, sample_id = NA_character_, proposed_action = "use_deterministic_protocol_order", user_decision = "", resolution_status = "unresolved")
+  for (left in seq_len(nrow(precedes) - 1L)) for (right in (left + 1L):ncol(precedes)) if (precedes[left, right] == precedes[right, left] && precedes[left, right] > 0L) {
+    left_config <- configs[[match(rownames(precedes)[[left]], keys)]]
+    right_config <- configs[[match(rownames(precedes)[[right]], keys)]]
+    details <- list(left_saliva_ids = left_config$saliva_ids, right_saliva_ids = right_config$saliva_ids, left_before_count = precedes[left, right], right_before_count = precedes[right, left])
+    issues[[length(issues) + 1L]] <- .new_conversion_issue(
+      "ambiguous_protocol_order",
+      sprintf("Protocol registration order is ambiguous between sample sets %s and %s. Supply an ordered protocol manifest.", .python_repr(left_config$saliva_ids), .python_repr(right_config$saliva_ids)),
+      details = details,
+      proposed_action = "use_deterministic_protocol_order",
+      proposed_action_description = "The tied transition is omitted from cohort precedence; remaining evidence and deterministic first-observed order are used. Supply a manifest to fix the order explicitly."
+    )
+  }
   edges <- precedes > t(precedes)
   diag(edges) <- FALSE
   remaining <- unique_keys
@@ -140,7 +174,16 @@
     }
     remaining <- setdiff(remaining, available[[1]])
   }
-  if (cyclic) issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("cyclic_protocol_order", "__cohort__", details = list(configurations = unique_keys)), code = "cyclic_protocol_order", participant = "__cohort__", day = NA_character_, sample_id = NA_character_, proposed_action = "use_deterministic_protocol_order", user_decision = "", resolution_status = "unresolved")
+  if (cyclic) {
+    sequences_details <- lapply(split(keys, participants, drop = TRUE), function(sequence) lapply(unique(sequence), function(key) configs[[match(key, keys)]]$saliva_ids))
+    issues[[length(issues) + 1L]] <- .new_conversion_issue(
+    "cyclic_protocol_order",
+    "Protocol registration transitions contain a cycle. Supply an ordered protocol manifest and inspect conflicting participants.",
+    details = list(participant_sequences = sequences_details),
+    proposed_action = "use_deterministic_protocol_order",
+    proposed_action_description = "A deterministic median-position and first-observed fallback order is used. Participant-specific violations remain reported. Supply a manifest to resolve the conflict."
+    )
+  }
   issues
 }
 
@@ -169,23 +212,34 @@
             registration = as.integer(registration[[previous_index]]),
             study_name = previous$study_name,
             saliva_ids = previous$saliva_ids,
-            timestamp = format(events$timestamp[[previous_index]], "%Y-%m-%dT%H:%M:%S%z"),
-            metadata_source_files = sort(unique(events$source_file[[previous_index]]))
+            timestamp = events$timestamp[[previous_index]],
+            metadata_source_files = sort(unique(unlist(strsplit(events$source_file[[previous_index]], ";", fixed = TRUE), use.names = FALSE)))
           ),
           current = list(
             registration = as.integer(registration[[index]]),
             study_name = current$study_name,
             saliva_ids = current$saliva_ids,
-            timestamp = format(events$timestamp[[index]], "%Y-%m-%dT%H:%M:%S%z"),
-            metadata_source_files = sort(unique(events$source_file[[index]]))
+            timestamp = events$timestamp[[index]],
+            metadata_source_files = sort(unique(unlist(strsplit(events$source_file[[index]], ";", fixed = TRUE), use.names = FALSE)))
           )
         )
-        issues[[length(issues) + 1L]] <- tibble::tibble(
-          issue_id = .issue_id("registration_order_violation", participant, details = details),
-          code = "registration_order_violation", participant = participant,
-          day = NA_character_, sample_id = NA_character_,
-          proposed_action = "reuse_registration", user_decision = "",
-          resolution_status = "unresolved", details = list(details)
+        issues[[length(issues) + 1L]] <- .new_conversion_issue(
+          "registration_order_violation",
+          paste0(
+            "Participant registration sequence violates the canonical protocol order: participant=", shQuote(participant),
+            ", observed_registrations=", .python_repr(as.integer(registration[valid])), ". Registration ", registration[[index]],
+            " [study_name=", shQuote(current$study_name), "; saliva_ids=", .python_repr(current$saliva_ids),
+            "; timestamp=", .python_repr(events$timestamp[[index]]), "; metadata_sources=", .python_repr(details$current$metadata_source_files),
+            "] was recorded again after registration ", registration[[previous_index]],
+            " [study_name=", shQuote(previous$study_name), "; saliva_ids=", .python_repr(previous$saliva_ids),
+            "; timestamp=", .python_repr(events$timestamp[[previous_index]]), "; metadata_sources=", .python_repr(details$previous$metadata_source_files),
+            "]. Expected canonical registration numbers to increase chronologically. Proposed action: retain the cohort-derived canonical order, map this metadata event to the existing registration ", registration[[index]], ", and do not create an additional canonical study day."
+          ),
+          participant,
+          registration = registration[[index]],
+          details = details,
+          proposed_action = "reuse_registration",
+          proposed_action_description = "The cohort-derived canonical registration order is retained; this metadata event does not create another canonical study day."
         )
       }
       previous_index <- index
@@ -208,6 +262,22 @@
   code
 }
 
+.issue_description <- function(code) {
+  switch(code,
+    invalid_study_metadata = "Ignore this unusable metadata event.",
+    scan_before_registration_metadata = "Drop the scan because no usable registration is active.",
+    invalid_day_expected = "Drop the scan because its expected day is outside the active registration.",
+    multiple_collection_dates = "Use the earliest collection date or explicitly map every collection date to a canonical day.",
+    possible_reregistration = "Reuse the active registration, or change to a compatible canonical registration.",
+    missing_awakening_time = "Use the matching manual-diary awakening time or provide an explicit local timestamp.",
+    expected_sample_not_in_active_metadata = "Override with an exact registered sample ID or drop the scan.",
+    duplicate_scheduled_sample_events = "Keep the earliest scan or reassign a safe recorded sample.",
+    non_increasing_sampling_times = "Drop the day or sort a complete scan series by time.",
+    missing_scheduled_sample_event = "Use the matching manual-diary sampling time or a schedule fallback.",
+    ""
+  )
+}
+
 .manifest_registration_missing_issues <- function(raw_logs, protocol_manifest) {
   if (is.null(protocol_manifest)) return(list())
   protocol <- .protocol_from_logs(raw_logs, protocol_manifest)
@@ -219,7 +289,15 @@
   for (participant in sort(unique(as.character(raw_logs$participant)))) {
     participant_keys <- unique(observed_keys[metadata$participant == participant])
     for (registration in which(!protocol_keys %in% participant_keys)) {
-      issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("manifest_registration_missing", participant, details = list(registration = registration)), code = "manifest_registration_missing", participant = participant, day = NA_character_, sample_id = NA_character_, proposed_action = "keep_missing_registration", user_decision = "", resolution_status = "unresolved")
+      issues[[length(issues) + 1L]] <- .new_conversion_issue(
+        "manifest_registration_missing",
+        sprintf("A manifest-defined registration is absent from participant logs: registration=%s, study_name=%s.", registration, shQuote(protocol[[registration]]$study_name)),
+        participant,
+        registration = registration,
+        details = list(saliva_ids = protocol[[registration]]$saliva_ids, canonical_days = unique(.registration_schedule(raw_logs, protocol_manifest)$day[.registration_schedule(raw_logs, protocol_manifest)$registration == registration])),
+        proposed_action = "keep_missing_registration",
+        proposed_action_description = "Expected schedule rows are created with missing registration timestamp and source provenance."
+      )
     }
   }
   issues
@@ -625,6 +703,16 @@ summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("r
   dplyr::bind_rows(long, dplyr::bind_rows(additions), dplyr::bind_rows(day_values))
 }
 
+.new_conversion_issue <- function(code, message, participant = "__cohort__", registration = NA_integer_, registration_day = NA_integer_, day = NA_character_, sample_position = NA_integer_, sample_id = NA_character_, details = list(), proposed_action = "", proposed_action_description = "") {
+  tibble::tibble(
+    code = code, message = message, participant = participant,
+    registration = as.integer(registration), registration_day = as.integer(registration_day),
+    day = day, sample_position = as.integer(sample_position), sample_id = sample_id,
+    details = list(details), proposed_action = proposed_action,
+    proposed_action_description = proposed_action_description
+  )
+}
+
 #' Convert immutable CARWatch raw logs to canonical Study Results
 #'
 #' The first pass only reports issues. Decisions passed through `issue_decisions`
@@ -665,7 +753,20 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
     registrations <- lapply(events$payload[events$action == "study_metadata"], .registration_config)
     registrations <- registrations[!vapply(registrations, is.null, logical(1))]
     if (!length(registrations)) {
-      issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("missing_registration_metadata", participant), code = "missing_registration_metadata", participant = participant, day = NA_character_, sample_id = NA_character_, proposed_action = "", user_decision = "", resolution_status = "unresolved")
+      # Python records one issue for each scan rather than introducing an
+      # additional, non-public "missing registration" issue code.
+      scans <- events[events$action == "barcode_scanned", , drop = FALSE]
+      for (scan_index in seq_len(nrow(scans))) {
+        scan <- scans[scan_index, , drop = FALSE]
+        issues[[length(issues) + 1L]] <- .new_conversion_issue(
+          "scan_before_registration_metadata",
+          sprintf("Barcode scan occurs before usable registration metadata: participant=%s, source_file=%s.", shQuote(participant), shQuote(scan$source_file[[1]])),
+          participant,
+          details = list(timestamp = scan$timestamp[[1]], source_file = scan$source_file[[1]], payload = scan$payload[[1]]),
+          proposed_action = "drop_sample",
+          proposed_action_description = "The scan is excluded because no active sampling configuration can resolve it."
+        )
+      }
       next
     }
     active_registration <- NA_integer_
@@ -675,6 +776,8 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
     collection_started <- FALSE
     metadata_seen <- FALSE
     active_source_registration <- NA_integer_
+    active_registered_at <- as.POSIXct(NA, tz = timezone)
+    active_metadata_sources <- character()
     override_target <- .reregistration_override_target(decision_frame, participant, protocol)
     for (i in seq_len(nrow(events))) {
       event <- events[i, , drop = FALSE]
@@ -682,9 +785,28 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
         config <- .registration_config(event$payload[[1]])
         if (!is.null(config)) {
           new_key <- .registration_key(config)
+          event_sources <- sort(unique(unlist(strsplit(event$source_file[[1]], ";", fixed = TRUE), use.names = FALSE)))
+          if (is.na(active_registered_at)) {
+            active_registered_at <- event$timestamp[[1]]
+            active_metadata_sources <- event_sources
+          }
           override_applied <- FALSE
           if (identical(new_key, current_config_key) && collection_started) {
-            issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("possible_reregistration", participant, details = list(timestamp = format(event$timestamp[[1]], "%Y-%m-%dT%H:%M:%S%z"))), code = "possible_reregistration", participant = participant, day = NA_character_, sample_id = NA_character_, proposed_action = "reuse_registration", user_decision = "", resolution_status = "unresolved")
+            issues[[length(issues) + 1L]] <- .new_conversion_issue(
+              "possible_reregistration",
+              sprintf("Identical study metadata was written after collection started: study_name=%s.", shQuote(config$study_name)),
+              participant,
+              details = list(
+                saliva_ids = config$saliva_ids,
+                timestamp = event$timestamp[[1]],
+                source_files = event_sources,
+                previous_registration_timestamp = active_registered_at,
+                previous_metadata_source_files = active_metadata_sources
+              ),
+              proposed_action = "reuse_registration",
+              proposed_action_description = "The event is treated as the existing registration and does not create another canonical day. To use another canonical registration from this metadata event onward, set user_decision='change' and provide {\"registration\": 2} with the canonical number or {\"registration\": \"study-name\"} with the exact study_name."
+            )
+            active_metadata_sources <- sort(unique(c(active_metadata_sources, event_sources)))
             if (!is.na(override_target)) {
               source_registration <- which(vapply(protocol, function(item) identical(.registration_key(item), current_config_key), logical(1)))
               if (length(source_registration) != 1L || override_target == source_registration[[1]]) .carwatch_abort("Registration override target is already active or cannot resolve the source registration.", "carwatch_value_error")
@@ -693,7 +815,13 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
               active_source_registration <- source_registration[[1]]
               override_applied <- TRUE
             }
-          } else if (!identical(new_key, current_config_key)) active_source_registration <- NA_integer_
+          } else if (!identical(new_key, current_config_key)) {
+            active_source_registration <- NA_integer_
+            active_registered_at <- event$timestamp[[1]]
+            active_metadata_sources <- event_sources
+          } else {
+            active_metadata_sources <- sort(unique(c(active_metadata_sources, event_sources)))
+          }
           current_config_key <- new_key
           position <- which(vapply(.protocol_from_logs(raw_logs, protocol_manifest), function(item) identical(.registration_key(item), current_config_key), logical(1)))
           if (length(position) && !override_applied) active_registration <- position[[1]]
@@ -702,12 +830,12 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
             registration_sources[[source_key]] <- sort(unique(c(registration_sources[[source_key]] %||% character(), event$source_file[[1]])))
           }
           metadata_seen <- TRUE
-        } else issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("invalid_study_metadata", participant, details = list(source_file = event$source_file[[1]])), code = "invalid_study_metadata", participant = participant, day = NA_character_, sample_id = NA_character_, proposed_action = "ignore_metadata_event", user_decision = "", resolution_status = "unresolved")
+        } else issues[[length(issues) + 1L]] <- .new_conversion_issue("invalid_study_metadata", sprintf("Invalid 'study_metadata' payload without usable 'saliva_ids': participant=%s, source_file=%s.", shQuote(participant), shQuote(event$source_file[[1]])), participant, details = list(source_file = event$source_file[[1]], payload = event$payload[[1]]), proposed_action = "ignore_metadata_event", proposed_action_description = "The invalid metadata event is ignored; the preceding usable registration remains active.")
         next
       }
       if (!event$action[[1]] %in% c("barcode_scanned", "spontaneous_awakening", "alarm")) next
       if (event$action[[1]] == "barcode_scanned" && !metadata_seen) {
-        issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("scan_before_registration_metadata", participant, details = list(source_file = event$source_file[[1]])), code = "scan_before_registration_metadata", participant = participant, day = NA_character_, sample_id = NA_character_, proposed_action = "drop_sample", user_decision = "", resolution_status = "unresolved")
+        issues[[length(issues) + 1L]] <- .new_conversion_issue("scan_before_registration_metadata", sprintf("Barcode scan occurs before usable registration metadata: participant=%s, source_file=%s.", shQuote(participant), shQuote(event$source_file[[1]])), participant, details = list(timestamp = event$timestamp[[1]], source_file = event$source_file[[1]], payload = event$payload[[1]]), proposed_action = "drop_sample", proposed_action_description = "The scan is excluded because no active sampling configuration can resolve it.")
         next
       }
       if (event$action[[1]] == "barcode_scanned") collection_started <- TRUE
@@ -719,7 +847,8 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
         expected_day <- suppressWarnings(as.integer(.payload_value(event$payload[[1]], "day_expected", 1L)))
         active_rows <- schedule[schedule$registration == active_registration, , drop = FALSE]
         if (is.na(expected_day) || !expected_day %in% active_rows$registration_day) {
-          issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("invalid_day_expected", participant, details = list(day_expected = expected_day, source_file = event$source_file[[1]])), code = "invalid_day_expected", participant = participant, day = NA_character_, sample_id = NA_character_, proposed_action = "drop_sample", user_decision = "", resolution_status = "unresolved")
+          study_days <- max(active_rows$registration_day)
+          issues[[length(issues) + 1L]] <- .new_conversion_issue("invalid_day_expected", sprintf("Barcode scan defines an invalid expected study day: participant=%s, registration=%s, day_expected=%s, study_days=%s.", shQuote(participant), active_registration, expected_day, study_days), participant, registration = active_registration, registration_day = expected_day, details = list(day_expected = expected_day, study_days = study_days, source_file = event$source_file[[1]]), proposed_action = "drop_sample", proposed_action_description = "The scan is excluded because its expected day is outside the active registration.")
           next
         }
         expected_sample <- as.character(.payload_value(event$payload[[1]], "sample_expected", ""))
@@ -731,7 +860,21 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
           recorded_sample <- as.character(.payload_value(event$payload[[1]], "sample_scanned", NA_character_))
           occupied <- any(vapply(events$payload[events$action == "barcode_scanned"], function(payload) identical(as.character(.payload_value(payload, "sample_expected", "")), recorded_sample), logical(1)))
           safe_target <- !is.na(day) && recorded_sample %in% active_rows$scheduled_sample && !occupied
-          issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("expected_sample_not_in_active_metadata", participant, day, expected_sample, details = list(sample_expected = expected_sample, source_file = event$source_file[[1]])), code = "expected_sample_not_in_active_metadata", participant = participant, day = day, sample_id = expected_sample, proposed_action = if (safe_target) "override_expected_sample" else "drop_sample", user_decision = "", resolution_status = "unresolved")
+          proposed_action <- if (safe_target) "override_expected_sample" else "drop_sample"
+          description <- if (safe_target) {
+            sprintf("Replace invalid expected sample %s with valid recorded sample %s, preserving the original sampling time, barcode, and recorded sample.", shQuote(expected_sample), shQuote(recorded_sample))
+          } else {
+            "The scan is excluded because its scheduled sample cannot be resolved to an active sample position. Set user_decision='override_expected_sample' and provide an exact registered ID in user_decision_value to reassign it manually."
+          }
+          issues[[length(issues) + 1L]] <- .new_conversion_issue(
+            "expected_sample_not_in_active_metadata",
+            sprintf("Barcode scan expected sample is absent from active registration metadata: participant=%s, sample=%s, study_name=%s, source_file=%s.", shQuote(participant), shQuote(expected_sample), shQuote(protocol[[active_registration]]$study_name), shQuote(event$source_file[[1]])),
+            participant,
+            registration = active_registration, registration_day = expected_day,
+            day = day, sample_id = expected_sample,
+            details = list(scheduled_sample = expected_sample, active_saliva_ids = protocol[[active_registration]]$saliva_ids, timestamp = event$timestamp[[1]], source_file = event$source_file[[1]]),
+            proposed_action = proposed_action, proposed_action_description = description
+          )
           if (!is.na(day)) records[[length(records) + 1L]] <- tibble::tibble(participant = participant, day = day, action = event$action[[1]], timestamp = event$timestamp[[1]], payload = list(event$payload[[1]]), source_file = event$source_file[[1]], registration = active_registration, registration_sources = paste(registration_sources[[as.character(active_registration)]] %||% character(), collapse = ";"), scheduled_sample_override = scheduled_sample_override, recorded_sample_override = recorded_sample_override)
           next
         }
@@ -752,9 +895,43 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
     collection_date <- if (length(scan_dates)) scan_dates[[1]] else if (nrow(events)) as.Date(events$timestamp[[1]], tz = timezone) else as.Date(NA)
     if (length(scan_dates) > 1L) {
       collection_date <- as.Date(NA)
-      issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("multiple_collection_dates", participant, day, details = list(dates = as.character(scan_dates))), code = "multiple_collection_dates", participant = participant, day = day, sample_id = NA_character_, proposed_action = "use_earliest_collection_date", user_decision = "", resolution_status = "unresolved")
+      date_details <- lapply(scan_dates, function(scan_date) {
+        date_events <- events[events$action == "barcode_scanned" & as.Date(events$timestamp, tz = timezone) == scan_date, , drop = FALSE]
+        list(
+          date = as.character(scan_date),
+          scheduled_samples = unique(vapply(date_events$payload, function(payload) as.character(.payload_value(payload, "sample_expected", "")), character(1))),
+          source_files = sort(unique(date_events$source_file))
+        )
+      })
+      scheduled <- vapply(events$payload[events$action == "barcode_scanned"], function(payload) as.character(.payload_value(payload, "sample_expected", "")), character(1))
+      repeated <- sort(unique(scheduled[duplicated(scheduled) | duplicated(scheduled, fromLast = TRUE)]))
+      first_position <- positions[1, , drop = FALSE]
+      spread_type <- if (length(repeated)) "repeated_samples_across_dates" else "unique_samples_spread_across_dates"
+      issues[[length(issues) + 1L]] <- .new_conversion_issue(
+        "multiple_collection_dates",
+        sprintf("A canonical registration day contains barcode scans on multiple collection dates: participant=%s, day=%s, dates=%s.", shQuote(participant), shQuote(day), .canonical_json(date_details)),
+        participant,
+        registration = first_position$registration[[1]], registration_day = first_position$registration_day[[1]], day = day,
+        details = list(classification = spread_type, dates = date_details, repeated_scheduled_samples = repeated),
+        proposed_action = "use_earliest_collection_date",
+        proposed_action_description = "Use the earliest retained scan date as the canonical day date. Original sample timestamps remain unchanged. Use user_decision='change' with user_decision_value set to 'use_latest_collection_date' or a complete JSON date-to-day mapping for another resolution."
+      )
     }
-    if (!nrow(awakening)) issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("missing_awakening_time", participant, day), code = "missing_awakening_time", participant = participant, day = day, sample_id = NA_character_, proposed_action = "use_manual_diary_awakening_time", user_decision = "", resolution_status = "unresolved")
+    observed_expected <- if (nrow(events)) vapply(events$payload[events$action == "barcode_scanned"], function(payload) as.character(.payload_value(payload, "sample_expected", "")), character(1)) else character()
+    relative_ids <- positions$scheduled_sample[positions$schedule_type == "relative"]
+    missing_relative_ids <- setdiff(relative_ids, observed_expected)
+    if (!nrow(awakening) && length(missing_relative_ids)) {
+      first_position <- positions[1, , drop = FALSE]
+      issues[[length(issues) + 1L]] <- .new_conversion_issue(
+        "missing_awakening_time",
+        sprintf("A canonical study day has missing samples with relative scheduled times but no awakening time: participant=%s, day=%s, study_name=%s.", shQuote(participant), shQuote(day), shQuote(first_position$study_name[[1]])),
+        participant,
+        registration = first_position$registration[[1]], registration_day = first_position$registration_day[[1]], day = day,
+        details = list(collection_date = collection_date, relative_sample_ids = missing_relative_ids, source_files = if (nrow(events)) sort(unique(events$registration_sources)) else character(), timezone = timezone, input_format = "YYYY-MM-DD HH:MM"),
+        proposed_action = "use_manual_diary_awakening_time",
+        proposed_action_description = "Use the awakening time from the manual diary."
+      )
+    }
     for (j in seq_len(nrow(positions))) {
       position <- positions[j, ]
       expected_match <- vapply(seq_len(nrow(events)), function(index) {
@@ -771,11 +948,35 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
         target <- if (length(mismatched) == 1L) recorded[[mismatched]] else NA_character_
         target_present <- if (!is.na(target)) any(vapply(events$payload[events$action == "barcode_scanned"], function(payload) identical(as.character(.payload_value(payload, "sample_expected", "")), target), logical(1))) else TRUE
         duplicate_reassignment <- nrow(scan) == 2L && length(correct) == 1L && length(mismatched) == 1L && target %in% positions$scheduled_sample && !target_present
-        issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("duplicate_scheduled_sample_events", participant, day, position$scheduled_sample, details = list(event_count = nrow(scan))), code = "duplicate_scheduled_sample_events", participant = participant, day = day, sample_id = position$scheduled_sample, proposed_action = if (duplicate_reassignment) "reassign_to_recorded_sample" else "keep_earliest_scan", user_decision = "", resolution_status = "unresolved")
+        scan <- scan[order(scan$timestamp), , drop = FALSE]
+        occurrences <- lapply(seq_len(nrow(scan)), function(index) list(
+          timestamp = scan$timestamp[[index]],
+          recorded_sample = .payload_value(scan$payload[[index]], "sample_scanned", NA_character_),
+          source_file = scan$source_file[[index]],
+          barcode = .payload_value(scan$payload[[index]], "barcode_value", NA_character_)
+        ))
+        reassignment_details <- if (duplicate_reassignment) list(proposed_reassignment = list(from_sample = position$scheduled_sample[[1]], to_sample = target, occurrence = occurrences[[mismatched[[1]]]])) else list()
+        details <- c(list(participant = participant, day = day, scheduled_sample = position$scheduled_sample[[1]], occurrences = occurrences, retained_occurrence = occurrences[[1]], other_occurrences = occurrences[-1], supplied_fields = c("sampling_time", "barcode", "recorded_sample")), reassignment_details)
+        issues[[length(issues) + 1L]] <- .new_conversion_issue(
+          "duplicate_scheduled_sample_events",
+          sprintf("A registration contains duplicate events for one scheduled sample: participant=%s, day=%s, sample=%s, occurrences=%s.", shQuote(participant), shQuote(day), shQuote(position$scheduled_sample[[1]]), .canonical_json(occurrences)),
+          participant,
+          registration = position$registration[[1]], registration_day = position$registration_day[[1]], day = day, sample_position = position$sample_position[[1]], sample_id = position$scheduled_sample[[1]], details = details,
+          proposed_action = if (duplicate_reassignment) "reassign_to_recorded_sample" else "keep_earliest_scan",
+          proposed_action_description = if (duplicate_reassignment) "Keep the correctly assigned occurrence and move the mismatched occurrence, including sampling_time and barcode, to its valid recorded_sample position." else "Use the earliest occurrence for sampling_time, barcode, and recorded_sample."
+        )
       }
       payload <- if (nrow(scan) && nrow(scan) == 1L) scan$payload[[1]] else list()
       sampling_time <- if (nrow(scan) == 1L) scan$timestamp[[1]] else as.POSIXct(NA)
-      if (!nrow(scan)) issues[[length(issues) + 1L]] <- tibble::tibble(issue_id = .issue_id("missing_scheduled_sample_event", participant, day, position$scheduled_sample), code = "missing_scheduled_sample_event", participant = participant, day = day, sample_id = position$scheduled_sample, proposed_action = "use_manual_diary_sampling_time", user_decision = "", resolution_status = "unresolved")
+      if (!nrow(scan)) issues[[length(issues) + 1L]] <- .new_conversion_issue(
+        "missing_scheduled_sample_event",
+        sprintf("An expected scheduled sample has no barcode scan: participant=%s, day=%s, sample=%s, study_name=%s.", shQuote(participant), shQuote(day), shQuote(position$scheduled_sample[[1]]), shQuote(position$study_name[[1]])),
+        participant,
+        registration = position$registration[[1]], registration_day = position$registration_day[[1]], day = day, sample_position = position$sample_position[[1]], sample_id = position$scheduled_sample[[1]],
+        details = list(registered_at = NA_character_, source_files = if (nrow(events)) sort(unique(events$registration_sources)) else character(), saliva_times = protocol[[position$registration[[1]]]]$saliva_times, saliva_absolute_times = protocol[[position$registration[[1]]]]$saliva_absolute_times),
+        proposed_action = "use_manual_diary_sampling_time",
+        proposed_action_description = "Use the sampling time from the manual diary."
+      )
       scheduled <- if (position$schedule_type == "absolute") .day_timestamp(collection_date, position$absolute_clock, timezone) else as.POSIXct(NA)
       recorded_sample <- if (nrow(scan) && !is.na(scan$recorded_sample_override[[1]]) && nzchar(scan$recorded_sample_override[[1]])) scan$recorded_sample_override[[1]] else .payload_value(payload, "sample_scanned", NA_character_)
       mismatch <- if (!is.na(recorded_sample) && recorded_sample != position$scheduled_sample) paste0(position$scheduled_sample, "->", recorded_sample) else NA_character_
@@ -792,10 +993,21 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
     ordered <- group[order(group$sample_position), , drop = FALSE]
     recorded <- ordered[!is.na(ordered$sampling_time), , drop = FALSE]
     if (nrow(recorded) > 1L && any(diff(as.numeric(recorded$sampling_time)) <= 0)) {
-      issues[[length(issues) + 1L]] <- tibble::tibble(
-        issue_id = .issue_id("non_increasing_sampling_times", recorded$participant[[1]], recorded$day[[1]], details = list(sample_positions = recorded$sample_position, timestamps = format(recorded$sampling_time, "%Y-%m-%dT%H:%M:%S%z"))),
-        code = "non_increasing_sampling_times", participant = recorded$participant[[1]], day = recorded$day[[1]], sample_id = NA_character_,
-        proposed_action = "drop_day", user_decision = "", resolution_status = "unresolved"
+      recordings <- lapply(seq_len(nrow(recorded)), function(index) list(sample_position = as.integer(recorded$sample_position[[index]]), scheduled_sample = recorded$sample[[index]], recorded_sample = recorded$recorded_sample[[index]], sampling_time = recorded$sampling_time[[index]], barcode = recorded$barcode[[index]], source_file = NA_character_))
+      invalid <- which(diff(as.numeric(recorded$sampling_time)) <= 0) + 1L
+      transitions <- lapply(invalid, function(index) list(from_sample_position = as.integer(recorded$sample_position[[index - 1L]]), from_sample = recorded$sample[[index - 1L]], from_time = recorded$sampling_time[[index - 1L]], to_sample_position = as.integer(recorded$sample_position[[index]]), to_sample = recorded$sample[[index]], to_time = recorded$sampling_time[[index]]))
+      expected_positions <- schedule$sample_position[schedule$day == recorded$day[[1]]]
+      complete <- identical(as.integer(recorded$sample_position), as.integer(expected_positions))
+      schedule_context <- schedule[schedule$day == recorded$day[[1]] & schedule$sample_position == min(recorded$sample_position), , drop = FALSE]
+      recording_text <- vapply(recordings, function(entry) sprintf("position %s (%s) at %s", entry$sample_position, shQuote(entry$scheduled_sample), .json_safe(entry$sampling_time)), character(1))
+      transition_text <- vapply(transitions, function(entry) sprintf("position %s at %s -> position %s at %s", entry$from_sample_position, .json_safe(entry$from_time), entry$to_sample_position, .json_safe(entry$to_time)), character(1))
+      note <- if (complete) "Chronological sample reassignment is available for this complete series." else sprintf("Chronological sample reassignment is unavailable because the series is incomplete; expected positions are %s.", .canonical_json(as.integer(expected_positions)))
+      issues[[length(issues) + 1L]] <- .new_conversion_issue(
+        "non_increasing_sampling_times",
+        sprintf("Sampling times do not follow registered sample-position order: participant=%s, day=%s. Recordings: %s. Non-increasing transitions: %s. %s With errors='warn', the original scan assignments and timestamps are retained unchanged.", shQuote(recorded$participant[[1]]), shQuote(recorded$day[[1]]), paste(recording_text, collapse = "; "), paste(transition_text, collapse = "; "), note),
+        recorded$participant[[1]], registration = schedule_context$registration[[1]], registration_day = schedule_context$registration_day[[1]], day = recorded$day[[1]],
+        details = list(recordings = recordings, non_increasing_transitions = transitions, warning_treatment = "Keep the original scan assignments and timestamps unchanged.", change_value = "sort_samples_by_time", sort_samples_by_time_available = complete, expected_sample_positions = as.integer(expected_positions), recorded_sample_positions = as.integer(recorded$sample_position)),
+        proposed_action = "drop_day", proposed_action_description = "Drop this study day because its sampling times do not follow sample-position order."
       )
     }
   }
@@ -822,7 +1034,12 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
     item <- issue_frame[row, , drop = FALSE]
     context <- schedule[schedule$day == item$day[[1]] & schedule$scheduled_sample == item$sample_id[[1]], , drop = FALSE]
     details <- item$details[[1]] %||% list()
-    added <- .report_add_issue(report_state, code = item$code[[1]], message = .protocol_issue_message(item), participant = item$participant[[1]], day = item$day[[1]], sample_id = item$sample_id[[1]], registration = if (nrow(context)) context$registration[[1]] else NA_integer_, registration_day = if (nrow(context)) context$registration_day[[1]] else NA_integer_, sample_position = if (nrow(context)) context$sample_position[[1]] else NA_integer_, details = details, proposed_action = item$proposed_action[[1]])
+    message <- if ("message" %in% names(item) && nzchar(item$message[[1]])) item$message[[1]] else .protocol_issue_message(item)
+    description <- if ("proposed_action_description" %in% names(item) && nzchar(item$proposed_action_description[[1]])) item$proposed_action_description[[1]] else .issue_description(item$code[[1]])
+    registration <- if ("registration" %in% names(item) && !is.na(item$registration[[1]])) item$registration[[1]] else if (nrow(context)) context$registration[[1]] else NA_integer_
+    registration_day <- if ("registration_day" %in% names(item) && !is.na(item$registration_day[[1]])) item$registration_day[[1]] else if (nrow(context)) context$registration_day[[1]] else NA_integer_
+    sample_position <- if ("sample_position" %in% names(item) && !is.na(item$sample_position[[1]])) item$sample_position[[1]] else if (nrow(context)) context$sample_position[[1]] else NA_integer_
+    added <- .report_add_issue(report_state, code = item$code[[1]], message = message, participant = item$participant[[1]], day = item$day[[1]], sample_id = item$sample_id[[1]], registration = registration, registration_day = registration_day, sample_position = sample_position, details = details, proposed_action = item$proposed_action[[1]], proposed_action_description = description)
     report_state <- added$report
   }
   if (!is.null(decision_frame) && nrow(report_state$issues)) {

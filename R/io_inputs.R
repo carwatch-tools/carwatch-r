@@ -208,6 +208,10 @@ read_raw_logs_from_participant_dirs <- function(participant_dirs, tz = "Europe/B
     timestamp <- as.POSIXct(timestamp_ms / 1000, origin = "1970-01-01", tz = tz)
     tibble::tibble(participant = participant, date = date, timestamp = timestamp, timestamp_ms = timestamp_ms, action = action, payload = list(payload), source_file = source_file)
   })
+  timestamps <- vapply(parsed, function(row) row$timestamp_ms[[1]], numeric(1))
+  if (length(timestamps) > 1L && any(diff(timestamps) < 0) && errors != "ignore") {
+    rlang::warn(sprintf("Timestamps are not monotonically increasing in %s; events are retained and will be sorted during conversion.", source_file), class = "carwatch_parse_warning")
+  }
   parsed
 }
 

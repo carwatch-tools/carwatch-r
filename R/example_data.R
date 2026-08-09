@@ -63,9 +63,10 @@ generate_synthetic_study_data <- function(output_dir, study_config = NULL, n_par
           payload <- jsonlite::toJSON(list(id = position - 1L, saliva_id = position, barcode_value = sprintf("%010d", sample.int(999999999, 1)), day_scanned = day, day_expected = day, sample_scanned = config$saliva_ids[[position]], sample_expected = config$saliva_ids[[position]]), auto_unbox = TRUE)
           entries <- c(entries, sprintf("%.0f;local;barcode_scanned;%s", as.numeric(sampled) * 1000, payload))
         }
-        if (create_cortisol_data) cortisol[[length(cortisol) + 1L]] <- tibble::tibble(participant = participant, day = paste0("D", day), sample_position = position, cortisol = round(8 + c(0, 3, 5, 2)[min(position, 4L)] + rnorm(1, 0, .25), 2))
+        if (create_cortisol_data) cortisol[[length(cortisol) + 1L]] <- tibble::tibble(participant = participant, day = paste0("D", day), sample_position = position, cortisol = round(8 + c(0, 3, 5, 2)[min(position, 4L)] + stats::rnorm(1, 0, .25), 2))
       }
       diary[[length(diary) + 1L]] <- tibble::as_tibble(row)
+      entries <- entries[order(suppressWarnings(as.numeric(sub(";.*$", "", entries))), method = "radix")]
       writeLines(entries, fs::path(folder, sprintf("carwatch_synthetic_%s_%s.csv", participant, format(date, "%Y%m%d"))), useBytes = TRUE)
     }
   }

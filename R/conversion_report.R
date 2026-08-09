@@ -17,7 +17,13 @@
 )
 
 .json_safe <- function(value) {
-  if (inherits(value, "POSIXt")) return(format(value, "%Y-%m-%dT%H:%M:%S%z"))
+  # Python's ``Timestamp.isoformat()`` emits an RFC 3339 offset (``+02:00``),
+  # while base R's %z omits the colon.  Issue identity includes serialized
+  # details, so this is a data contract rather than presentation formatting.
+  if (inherits(value, "POSIXt")) {
+    stamp <- format(value, "%Y-%m-%dT%H:%M:%S%z")
+    return(sub("([+-][0-9]{2})([0-9]{2})$", "\\1:\\2", stamp))
+  }
   if (is.list(value)) {
     if (!is.null(names(value))) return(lapply(value[order(names(value))], .json_safe))
     return(lapply(value, .json_safe))
@@ -80,12 +86,19 @@
 }
 
 .decision_supersedes <- function(upstream, stale) {
-  if (upstream$user_decision %in% c("drop_participant")) return(upstream$participant == stale$participant)
-  if (upstream$user_decision == "drop_day") return(upstream$participant == stale$participant && identical(upstream$day, stale$day))
-  if (upstream$user_decision == "drop_sample") return(upstream$participant == stale$participant && identical(upstream$day, stale$day) && identical(upstream$sample_id, stale$sample_id))
-  if (upstream$code == "possible_reregistration" && upstream$user_decision == "change") return(stale$participant == upstream$participant)
-  if (upstream$code == "multiple_collection_dates" && upstream$user_decision == "change") return(stale$participant == upstream$participant)
-  FALSE
+  decision <- upstream$user_decision[[1]]; value <- upstream$user_decision_value[[1]]
+  if (identical(decision, "keep")) return(FALSE)
+  participant <- upstream$participant[[1]]; stale_participant <- stale$participant[[1]]
+  if (!identical(participant, "__cohort__") && !identical(participant, stale_participant)) return(FALSE)
+  if (identical(decision, "drop_participant")) return(TRUE)
+  if (identical(decision, "drop_day")) return(identical(upstream$day[[1]], stale$day[[1]]))
+  if (identical(decision, "drop_sample")) return(identical(upstream$day[[1]], stale$day[[1]]) && identical(upstream$sample_id[[1]], stale$sample_id[[1]]))
+  code <- upstream$code[[1]]; stale_code <- stale$code[[1]]
+  if (code %in% c("ambiguous_protocol_order", "cyclic_protocol_order")) return(identical(decision, "accept"))
+  if (identical(code, "multiple_collection_dates")) return(identical(decision, "change") && !value %in% c("use_earliest_collection_date", "use_latest_collection_date") && stale_code %in% c("possible_reregistration", "duplicate_scheduled_sample_events", "non_increasing_sampling_times", "missing_scheduled_sample_event"))
+  if (identical(code, "expected_sample_not_in_active_metadata")) return(decision %in% c("accept", "override_expected_sample") && stale_code %in% c("duplicate_scheduled_sample_events", "missing_scheduled_sample_event"))
+  if (identical(code, "possible_reregistration")) return(identical(decision, "change") && stale_code %in% c("multiple_collection_dates", "expected_sample_not_in_active_metadata", "duplicate_scheduled_sample_events", "non_increasing_sampling_times", "missing_awakening_time", "missing_scheduled_sample_event"))
+  identical(code, "duplicate_scheduled_sample_events") && identical(decision, "accept") && stale_code %in% c("non_increasing_sampling_times", "missing_scheduled_sample_event")
 }
 
 .new_conversion_report <- function(raw_logs, issue_decisions = NULL) {
@@ -141,7 +154,7 @@
   issues <- report$issues
   if (nrow(issues)) {
     priority <- match(issues$code, .conversion_issue_codes, nomatch = length(.conversion_issue_codes) + 1L)
-    issues <- issues[order(issues$participant != "__cohort__", tolower(issues$participant), issues$day, issues$sample_id, priority, issues$issue_id, na.last = TRUE), , drop = FALSE]
+    issues <- issues[order(issues$participant != "__cohort__", tolower(issues$participant), issues$day, issues$sample_id, priority, tolower(issues$code), issues$registration, issues$registration_day, issues$sample_position, issues$issue_id, na.last = TRUE), , drop = FALSE]
   }
   list(summary = list(input_event_count = report$input_event_count, input_participant_count = report$input_participant_count, input_source_file_count = report$input_source_file_count, output_participant_count = nrow(results), canonical_day_count = dplyr::n_distinct(schedule$day), expected_sample_position_count = nrow(schedule), recorded_sample_event_count = as.integer(recorded_sample_event_count), issue_count = nrow(issues)), issues = issues)
 }

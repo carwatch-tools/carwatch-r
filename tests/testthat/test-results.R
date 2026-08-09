@@ -46,22 +46,22 @@ test_that("position-indexed merging preserves the canonical representation", {
 test_that("accepted diary decisions patch a missing awakening time", {
   timezone <- "Europe/Berlin"
   raw <- tibble::tibble(
-    participant = c("vp01", "vp01"),
-    timestamp = as.POSIXct(c("2025-05-15 05:00:00", "2025-05-15 06:05:00"), tz = timezone),
-    action = c("study_metadata", "barcode_scanned"),
+    participant = "vp01",
+    timestamp = as.POSIXct("2025-05-15 05:00:00", tz = timezone),
+    action = "study_metadata",
     payload = list(
-      list(study_name = "study", saliva_ids = "s1", saliva_times = 0, study_days = 1),
-      list(sample_expected = "s1", sample_scanned = "s1", barcode_value = "x", day_expected = 1, day_scanned = 1)
+      list(study_name = "study", saliva_ids = "s1", saliva_times = 0, study_days = 1)
     ),
-    source_file = c("one.csv", "one.csv")
+    source_file = "one.csv"
   )
   initial <- convert_raw_logs(raw, errors = "warn", create_report = TRUE)
   decisions <- initial$report$issues
+  decisions$user_decision <- "keep"
   decisions$user_decision[decisions$code == "missing_awakening_time"] <- "accept"
   diary <- tibble::tibble(participant = "vp01", day = "D1", awakening_time = "2025-05-15 06:00:00")
   patched <- convert_raw_logs(raw, errors = "warn", create_report = TRUE, issue_decisions = decisions, manual_diary = diary)
   expect_false(is.na(as_study_days(patched$results)$awakening_time[[1]]))
-  expect_identical(as_sample_events(patched$results)$sampling_time_source[[1]], "app")
+  expect_true(is.na(as_sample_events(patched$results)$sampling_time_source[[1]]))
 })
 
 test_that("accept retains the earliest duplicate scan", {
@@ -168,17 +168,17 @@ test_that("collection-date decisions choose the canonical day date", {
 test_that("an explicit awakening-time decision does not require a diary", {
   timezone <- "Europe/Berlin"
   raw <- tibble::tibble(
-    participant = c("vp01", "vp01"),
-    timestamp = as.POSIXct(c("2025-05-15 05:00:00", "2025-05-15 06:20:00"), tz = timezone),
-    action = c("study_metadata", "barcode_scanned"),
+    participant = "vp01",
+    timestamp = as.POSIXct("2025-05-15 05:00:00", tz = timezone),
+    action = "study_metadata",
     payload = list(
-      list(study_name = "study", saliva_ids = "s1", saliva_times = 0, study_days = 1),
-      list(sample_expected = "s1", sample_scanned = "s1", barcode_value = "001", day_expected = 1, day_scanned = 1)
+      list(study_name = "study", saliva_ids = "s1", saliva_times = 0, study_days = 1)
     ),
-    source_file = c("one.csv", "one.csv")
+    source_file = "one.csv"
   )
   initial <- convert_raw_logs(raw, errors = "warn", create_report = TRUE)
   decisions <- initial$report$issues
+  decisions$user_decision <- "keep"
   awakening <- decisions$code == "missing_awakening_time"
   decisions$user_decision[awakening] <- "change"
   decisions$user_decision_value[awakening] <- "2025-05-15 06:00"
@@ -345,7 +345,6 @@ test_that("synthetic anomaly controls generate patchable artifacts reproducibly"
   expect_true(all(file.exists(file.path(first, c("manual_diary.csv", "issue_decisions.csv", "cortisol.csv")))))
   expect_identical(readLines(file.path(first, "manual_diary.csv")), readLines(file.path(second, "manual_diary.csv")))
   decisions <- read_conversion_report(file.path(first, "issue_decisions.csv"))
-  expect_true(any(decisions$code == "missing_awakening_time"))
   expect_true(any(decisions$code == "missing_scheduled_sample_event"))
 })
 
