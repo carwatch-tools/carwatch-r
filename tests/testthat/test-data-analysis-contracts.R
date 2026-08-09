@@ -216,6 +216,7 @@ test_that("wide compliance clearing retains schedule structure", {
   expect_identical(sample_only$sample_position[failed], 2L)
   whole_day <- as_sample_events(drop_non_compliant_samples(results))
   expect_true(all(is.na(whole_day$cortisol)))
+  expect_identical(whole_day$sample_position, data$sample_position)
 })
 
 test_that("static plots use actual time, status, and source provenance", {
@@ -231,10 +232,14 @@ test_that("static plots use actual time, status, and source provenance", {
   timeline <- plot_sampling_timeline(data, "vp01", "D1")
   expect_s3_class(timeline, "ggplot")
   expect_identical(timeline$labels$y, "Scheduled sample")
+  other <- dplyr::mutate(data, participant = "vp02")
+  multi_participant <- dplyr::bind_rows(data, other)
+  expect_equal(nrow(plot_sampling_timeline(multi_participant, "vp01", "D1")$data), nrow(data))
   expect_s3_class(plot_compliance_overview(data), "ggplot")
   expect_s3_class(plot_compliance_overview(data, view = "heatmap"), "ggplot")
   expect_s3_class(plot_timing_deviation(data), "ggplot")
   curve <- plot_saliva_curve(data, group_by = "condition", n_boot = 20)
   expect_identical(curve$labels$x, "Minutes since awakening")
+  expect_equal(nrow(plot_saliva_curve(multi_participant, participant = "vp01")$data), nrow(data))
   expect_error(plot_timing_deviation(dplyr::mutate(data, time_deviation_min = NA_real_)), "No recorded timing deviations")
 })

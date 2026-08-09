@@ -8,7 +8,7 @@
 #' @return A ggplot object.
 #' @export
 plot_sampling_timeline <- function(data, participant, day, show_expected = TRUE) {
-  samples <- dplyr::filter(.plot_samples(data), .data$participant == participant, .data$day == day)
+  samples <- dplyr::filter(.plot_samples(data), .data$participant == .env$participant, .data$day == .env$day)
   if (!nrow(samples)) .carwatch_abort("Participant/day combination is absent from Study Results.", "carwatch_value_error")
   .assert_scalar_logical(show_expected, "show_expected")
   .require_columns(samples, c("sample", "sample_position", "sampling_time", "sample_compliant", "sampling_time_source"), "Timeline data")
@@ -76,8 +76,8 @@ plot_saliva_curve <- function(data, value = "cortisol", participant = NULL, day 
   .assert_scalar_logical(show_individual, "show_individual")
   if (length(ci) != 1L || is.na(ci) || ci <= 0 || ci >= 100) .carwatch_abort("`ci` must be between 0 and 100.", "carwatch_value_error")
   if (length(n_boot) != 1L || is.na(n_boot) || n_boot < 1L) .carwatch_abort("`n_boot` must be a positive integer.", "carwatch_value_error")
-  if (!is.null(participant)) samples <- dplyr::filter(samples, .data$participant == participant)
-  if (!is.null(day)) samples <- dplyr::filter(samples, .data$day == day)
+  if (!is.null(participant)) samples <- dplyr::filter(samples, .data$participant == .env$participant)
+  if (!is.null(day)) samples <- dplyr::filter(samples, .data$day == .env$day)
   if (!nrow(samples)) .carwatch_abort("No saliva samples match the requested filters.", "carwatch_value_error")
   if (!is.null(group_by)) .require_columns(samples, group_by, "Saliva data")
   samples$.curve <- interaction(samples$participant, samples$day, drop = TRUE, lex.order = TRUE)
