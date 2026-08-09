@@ -34,6 +34,23 @@
 
 .canonical_json <- function(value) jsonlite::toJSON(.json_safe(value), auto_unbox = TRUE, null = "null", digits = NA)
 
+.python_detail_repr <- function(value) {
+  if (inherits(value, "POSIXt")) return(paste0("'", .json_safe(value), "'"))
+  if (inherits(value, "Date")) return(paste0("'", as.character(value), "'"))
+  if (is.list(value)) {
+    if (!is.null(names(value)) && any(nzchar(names(value)))) {
+      parts <- vapply(seq_along(value), function(index) sprintf("'%s': %s", gsub("'", "\\\\'", names(value)[[index]]), .python_detail_repr(value[[index]])), character(1))
+      return(paste0("{", paste(parts, collapse = ", "), "}"))
+    }
+    return(paste0("[", paste(vapply(value, .python_detail_repr, character(1)), collapse = ", "), "]"))
+  }
+  if (!length(value) || (length(value) == 1L && is.na(value))) return("None")
+  if (length(value) > 1L) return(.python_detail_repr(as.list(value)))
+  if (is.character(value)) return(paste0("'", gsub("'", "\\\\'", value), "'"))
+  if (is.logical(value)) return(if (value) "True" else "False")
+  as.character(value)
+}
+
 .stable_issue_id <- function(participant, registration = NA_integer_, registration_day = NA_integer_, day = NA_character_, sample_position = NA_integer_, sample_id = NA_character_, code, details = list()) {
   details_json <- as.character(.canonical_json(details))
   identity <- list(participant = participant %||% "__cohort__", registration = registration, registration_day = registration_day, day = day, sample_position = sample_position, sample_id = sample_id, code = code, details = details_json)

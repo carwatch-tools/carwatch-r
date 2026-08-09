@@ -762,7 +762,7 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("rai
     .protocol_order_issues(raw_logs, protocol_manifest),
     .registration_order_violation_issues(raw_logs, protocol_manifest),
     .manifest_registration_missing_issues(raw_logs, protocol_manifest)
-  ); records <- list()
+  ); records <- list(); registration_context <- list()
   for (participant in participants) {
     events <- dplyr::arrange(dplyr::filter(raw_logs, .data$participant == .env$participant), .data$timestamp)
     registrations <- lapply(events$payload[events$action == "study_metadata"], .registration_config)
@@ -843,6 +843,7 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("rai
           if (!is.na(active_registration)) {
             source_key <- as.character(active_registration)
             registration_sources[[source_key]] <- sort(unique(c(registration_sources[[source_key]] %||% character(), event$source_file[[1]])))
+            registration_context[[paste(participant, active_registration, sep = "\r")]] <- list(registered_at = active_registered_at, source_files = active_metadata_sources)
           }
           metadata_seen <- TRUE
         } else issues[[length(issues) + 1L]] <- .new_conversion_issue("invalid_study_metadata", sprintf("Invalid 'study_metadata' payload without usable 'saliva_ids': participant=%s, source_file=%s.", shQuote(participant), shQuote(event$source_file[[1]])), participant, details = list(source_file = event$source_file[[1]], payload = event$payload[[1]]), proposed_action = "ignore_metadata_event", proposed_action_description = "The invalid metadata event is ignored; the preceding usable registration remains active.")
@@ -894,7 +895,7 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("rai
             sprintf("Barcode scan expected sample is absent from active registration metadata: participant=%s, sample=%s, study_name=%s, source_file=%s.", shQuote(participant), shQuote(expected_sample), shQuote(protocol[[active_registration]]$study_name), shQuote(event$source_file[[1]])),
             participant,
             registration = active_registration, registration_day = expected_day,
-            day = day, sample_id = expected_sample,
+            day = day, sample_id = NA_character_,
             details = list(scheduled_sample = expected_sample, active_saliva_ids = protocol[[active_registration]]$saliva_ids, timestamp = event$timestamp[[1]], source_file = event$source_file[[1]]),
             proposed_action = proposed_action, proposed_action_description = description
           )
@@ -922,8 +923,8 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("rai
         date_events <- events[events$action == "barcode_scanned" & as.Date(events$timestamp, tz = timezone) == scan_date, , drop = FALSE]
         list(
           date = as.character(scan_date),
-          scheduled_samples = unique(vapply(date_events$payload, function(payload) as.character(.payload_value(payload, "sample_expected", "")), character(1))),
-          source_files = sort(unique(date_events$source_file))
+          scheduled_samples = as.list(unique(vapply(date_events$payload, function(payload) as.character(.payload_value(payload, "sample_expected", "")), character(1)))),
+          source_files = as.list(sort(unique(date_events$source_file)))
         )
       })
       scheduled <- vapply(events$payload[events$action == "barcode_scanned"], function(payload) as.character(.payload_value(payload, "sample_expected", "")), character(1))
@@ -932,10 +933,10 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("rai
       spread_type <- if (length(repeated)) "repeated_samples_across_dates" else "unique_samples_spread_across_dates"
       issues[[length(issues) + 1L]] <- .new_conversion_issue(
         "multiple_collection_dates",
-        sprintf("A canonical registration day contains barcode scans on multiple collection dates: participant=%s, day=%s, dates=%s.", shQuote(participant), shQuote(day), .canonical_json(date_details)),
+        sprintf("A canonical registration day contains barcode scans on multiple collection dates: participant=%s, day=%s, dates=%s.", shQuote(participant), shQuote(day), .python_detail_repr(date_details)),
         participant,
         registration = first_position$registration[[1]], registration_day = first_position$registration_day[[1]], day = day,
-        details = list(classification = spread_type, dates = date_details, repeated_scheduled_samples = repeated),
+        details = list(classification = spread_type, dates = date_details, repeated_scheduled_samples = as.list(repeated)),
         proposed_action = "use_earliest_collection_date",
         proposed_action_description = "Use the earliest retained scan date as the canonical day date. Original sample timestamps remain unchanged. Use user_decision='change' with user_decision_value set to 'use_latest_collection_date' or a complete JSON date-to-day mapping for another resolution."
       )
@@ -950,7 +951,7 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("rai
         sprintf("A canonical study day has missing samples with relative scheduled times but no awakening time: participant=%s, day=%s, study_name=%s.", shQuote(participant), shQuote(day), shQuote(first_position$study_name[[1]])),
         participant,
         registration = first_position$registration[[1]], registration_day = first_position$registration_day[[1]], day = day,
-        details = list(collection_date = collection_date, relative_sample_ids = missing_relative_ids, source_files = if (nrow(events)) sort(unique(events$registration_sources)) else character(), timezone = timezone, input_format = "YYYY-MM-DD HH:MM"),
+        details = list(collection_date = collection_date, relative_sample_ids = as.list(missing_relative_ids), source_files = as.list((registration_context[[paste(participant, first_position$registration[[1]], sep = "\r")]] %||% list(source_files = character()))$source_files), timezone = timezone, input_format = "YYYY-MM-DD HH:MM"),
         proposed_action = "use_manual_diary_awakening_time",
         proposed_action_description = "Use the awakening time from the manual diary."
       )
@@ -982,7 +983,7 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("rai
         details <- c(list(participant = participant, day = day, scheduled_sample = position$scheduled_sample[[1]], occurrences = occurrences, retained_occurrence = occurrences[[1]], other_occurrences = occurrences[-1], supplied_fields = c("sampling_time", "barcode", "recorded_sample")), reassignment_details)
         issues[[length(issues) + 1L]] <- .new_conversion_issue(
           "duplicate_scheduled_sample_events",
-          sprintf("A registration contains duplicate events for one scheduled sample: participant=%s, day=%s, sample=%s, occurrences=%s.", shQuote(participant), shQuote(day), shQuote(position$scheduled_sample[[1]]), .canonical_json(occurrences)),
+          sprintf("A registration contains duplicate events for one scheduled sample: participant=%s, day=%s, sample=%s, occurrences=%s.", shQuote(participant), shQuote(day), shQuote(position$scheduled_sample[[1]]), .python_detail_repr(occurrences)),
           participant,
           registration = position$registration[[1]], registration_day = position$registration_day[[1]], day = day, sample_position = position$sample_position[[1]], sample_id = position$scheduled_sample[[1]], details = details,
           proposed_action = if (duplicate_reassignment) "reassign_to_recorded_sample" else "keep_earliest_scan",
@@ -991,12 +992,16 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("rai
       }
       payload <- if (nrow(scan) && nrow(scan) == 1L) scan$payload[[1]] else list()
       sampling_time <- if (nrow(scan) == 1L) scan$timestamp[[1]] else as.POSIXct(NA)
-      if (!nrow(scan)) issues[[length(issues) + 1L]] <- .new_conversion_issue(
+      potential_override <- !nrow(scan) && nrow(events) && any(!is.na(events$recorded_sample_override) & events$recorded_sample_override == position$scheduled_sample & !is.na(events$scheduled_sample_override) & events$scheduled_sample_override != position$scheduled_sample, na.rm = TRUE)
+      if (!nrow(scan) && !potential_override) issues[[length(issues) + 1L]] <- .new_conversion_issue(
         "missing_scheduled_sample_event",
         sprintf("An expected scheduled sample has no barcode scan: participant=%s, day=%s, sample=%s, study_name=%s.", shQuote(participant), shQuote(day), shQuote(position$scheduled_sample[[1]]), shQuote(position$study_name[[1]])),
         participant,
         registration = position$registration[[1]], registration_day = position$registration_day[[1]], day = day, sample_position = position$sample_position[[1]], sample_id = position$scheduled_sample[[1]],
-        details = list(registered_at = NA_character_, source_files = if (nrow(events)) sort(unique(events$registration_sources)) else character(), saliva_times = protocol[[position$registration[[1]]]]$saliva_times, saliva_absolute_times = protocol[[position$registration[[1]]]]$saliva_absolute_times),
+        details = {
+          context <- registration_context[[paste(participant, position$registration[[1]], sep = "\r")]] %||% list(registered_at = as.POSIXct(NA), source_files = character())
+          list(registered_at = context$registered_at, source_files = as.list(context$source_files), saliva_times = as.list(as.character(protocol[[position$registration[[1]]]]$saliva_times)), saliva_absolute_times = as.list(as.character(protocol[[position$registration[[1]]]]$saliva_absolute_times)))
+        },
         proposed_action = "use_manual_diary_sampling_time",
         proposed_action_description = "Use the sampling time from the manual diary."
       )

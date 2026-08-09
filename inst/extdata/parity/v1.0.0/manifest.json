@@ -1,7 +1,7 @@
 {
   "oracle": "carwatch-python",
   "oracle_version": "1.0.0",
-  "fixture_schema": 1,
+  "fixture_schema": 2,
   "artifacts": [
     "results.csv",
     "issue_report.csv",
@@ -10,5 +10,11 @@
     "merged_results.csv",
     "compliance.csv",
     "features.csv"
+  ],
+  "conversion_scenarios": [
+    "missing",
+    "duplicate",
+    "invalid_expected",
+    "multiple_dates"
   ]
 }
