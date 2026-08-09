@@ -1,4 +1,8 @@
 test_that("canonical results round-trip through the three-header CSV", {
+  previous_tz <- Sys.getenv("TZ", unset = NA_character_)
+  on.exit(if (is.na(previous_tz)) Sys.unsetenv("TZ") else Sys.setenv(TZ = previous_tz), add = TRUE)
+  Sys.setenv(TZ = "UTC")
+
   long <- tibble::tibble(
     participant = c("vp01", "vp01", "vp01", "vp01"),
     day = c("D1", "D1", "D1", "D1"),
@@ -16,6 +20,7 @@ test_that("canonical results round-trip through the three-header CSV", {
   write_study_results(original, path)
   restored <- read_study_results(path)
   expect_s3_class(restored, "carwatch_results")
+  expect_equal(as_study_days(restored)$date, as.POSIXct("2026-02-01", tz = "Europe/Berlin"))
   expect_equal(as_sample_events(restored)$cortisol, 12.5)
   expect_equal(as_sample_events(restored)$sample_position, 1L)
 })
