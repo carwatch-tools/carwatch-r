@@ -1,5 +1,11 @@
+.parity_fixture_root <- function() {
+  installed <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+  if (nzchar(installed)) return(installed)
+  testthat::test_path("..", "..", "inst", "extdata", "parity", "v1.0.0")
+}
+
 test_that("Python 1.0.0 canonical result fixtures round-trip semantically", {
-  root <- testthat::test_path("..", "..", "inst", "extdata", "parity", "v1.0.0")
+  root <- .parity_fixture_root()
   testthat::skip_if_not(fs::file_exists(fs::path(root, "manifest.json")))
   manifest <- jsonlite::read_json(fs::path(root, "manifest.json"), simplifyVector = TRUE)
   expect_identical(manifest$oracle_version, "1.0.0")
@@ -12,7 +18,7 @@ test_that("Python 1.0.0 canonical result fixtures round-trip semantically", {
 })
 
 test_that("parity fixture source audit and laboratory merge are accepted", {
-  root <- testthat::test_path("..", "..", "inst", "extdata", "parity", "v1.0.0")
+  root <- .parity_fixture_root()
   testthat::skip_if_not(fs::file_exists(fs::path(root, "results.csv")))
   results <- read_study_results(fs::path(root, "results.csv"))
   saliva <- read_saliva(fs::path(root, "saliva.csv"))
@@ -21,7 +27,7 @@ test_that("parity fixture source audit and laboratory merge are accepted", {
 })
 
 test_that("raw fixture reconstructs the Python canonical schema", {
-  root <- testthat::test_path("..", "..", "inst", "extdata", "parity", "v1.0.0")
+  root <- .parity_fixture_root()
   testthat::skip_if_not(fs::dir_exists(fs::path(root, "raw")))
   expected <- read_study_results(fs::path(root, "results.csv"))
   imported <- read_raw_logs_from_participant_dirs(
@@ -36,11 +42,11 @@ test_that("raw fixture reconstructs the Python canonical schema", {
 })
 
 test_that("conversion reports match Python 1.0.0 field for field", {
-  root <- testthat::test_path("..", "..", "inst", "extdata", "parity", "v1.0.0")
+  root <- .parity_fixture_root()
   manifest <- jsonlite::read_json(fs::path(root, "manifest.json"), simplifyVector = TRUE)
   expect_gte(manifest$fixture_schema, 2)
   for (scenario in manifest$conversion_scenarios) {
-    scenario_root <- fs::path(root, "conversion_scenarios", scenario)
+    scenario_root <- fs::path(root, "conv", scenario)
     raw <- read_raw_logs_from_participant_dirs(stats::setNames(fs::path(scenario_root, "raw", "p1"), "p1"))
     converted <- suppressWarnings(convert_raw_logs(raw, errors = "warn", create_report = TRUE))
     expected <- readr::read_csv(

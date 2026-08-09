@@ -14,7 +14,7 @@
   "conversion_scenarios": [
     "missing",
     "duplicate",
-    "invalid_expected",
-    "multiple_dates"
+    "invalid",
+    "dates"
   ]
 }

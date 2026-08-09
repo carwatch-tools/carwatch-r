@@ -545,7 +545,13 @@ summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("r
 .apply_expected_sample_override <- function(long, event_records, schedule, item) {
   participant <- item$participant[[1]]
   day <- item$day[[1]]
-  scans <- .barcode_scan_rows(event_records, participant, day, item$sample_id[[1]])
+  source_sample <- item$sample_id[[1]]
+  if (is.na(source_sample) || !nzchar(source_sample)) {
+    details <- tryCatch(jsonlite::fromJSON(item$details[[1]], simplifyVector = TRUE), error = function(error) NULL)
+    source_sample <- as.character(details$scheduled_sample %||% NA_character_)
+  }
+  if (is.na(source_sample) || !nzchar(source_sample)) return(long)
+  scans <- .barcode_scan_rows(event_records, participant, day, source_sample)
   if (!nrow(scans)) return(long)
   scan <- scans[order(scans$timestamp), , drop = FALSE][1, , drop = FALSE]
   action <- item$user_decision[[1]]

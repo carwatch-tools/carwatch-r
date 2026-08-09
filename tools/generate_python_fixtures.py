@@ -24,14 +24,13 @@ def epoch_ms(value: str) -> int:
 
 
 def write_conversion_scenario(name: str, entries: list[tuple[str, str, dict]]) -> None:
-    root = ROOT / "conversion_scenarios" / name
+    root = ROOT / "conv" / name
     if root.exists():
         shutil.rmtree(root)
     raw_dir = root / "raw" / "p1"
     raw_dir.mkdir(parents=True)
     contents = "".join(line(epoch_ms(timestamp), action, payload) for timestamp, action, payload in entries)
-    token = name.replace("_", "-")
-    (raw_dir / f"carwatch_{token}_p1_20250515.csv").write_text(contents)
+    (raw_dir / "x_p1.csv").write_text(contents)
     raw = cw.io.load_raw_logs_from_participant_folders({"p1": raw_dir})
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -88,7 +87,7 @@ def main() -> None:
         ],
     )
     write_conversion_scenario(
-        "invalid_expected",
+        "invalid",
         [
             ("2025-05-15 05:00", "study_metadata", scenario_metadata),
             ("2025-05-15 06:00", "spontaneous_awakening", {"id": 0}),
@@ -97,7 +96,7 @@ def main() -> None:
         ],
     )
     write_conversion_scenario(
-        "multiple_dates",
+        "dates",
         [
             ("2025-05-15 05:00", "study_metadata", scenario_metadata),
             ("2025-05-15 06:00", "spontaneous_awakening", {"id": 0}),
@@ -106,7 +105,7 @@ def main() -> None:
         ],
     )
     artifacts = ["results.csv", "issue_report.csv", "source_audit.csv", "saliva.csv", "merged_results.csv", "compliance.csv", "features.csv"]
-    (ROOT / "manifest.json").write_text(json.dumps({"oracle": "carwatch-python", "oracle_version": "1.0.0", "fixture_schema": 2, "artifacts": artifacts, "conversion_scenarios": ["missing", "duplicate", "invalid_expected", "multiple_dates"]}, indent=2) + "\n")
+    (ROOT / "manifest.json").write_text(json.dumps({"oracle": "carwatch-python", "oracle_version": "1.0.0", "fixture_schema": 2, "artifacts": artifacts, "conversion_scenarios": ["missing", "duplicate", "invalid", "dates"]}, indent=2) + "\n")
 
 
 if __name__ == "__main__":
