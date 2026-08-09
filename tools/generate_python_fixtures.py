@@ -63,6 +63,8 @@ def main() -> None:
     results, report = cw.logs.convert_raw_logs_to_study_manager_summary(logs, errors="warn", create_report=True)
     cw.io.save_study_results(results, ROOT / "results.csv")
     report["issues"].to_csv(ROOT / "issue_report.csv")
+    for column in ("participant_folder", "source"):
+        audit[column] = audit[column].map(lambda value: Path(value).relative_to(ROOT).as_posix())
     audit.to_csv(ROOT / "source_audit.csv", index=False)
     saliva = pd.DataFrame({"participant": ["VP01", "VP01"], "sample": ["tube-a", "tube-b"], "cortisol": [5.0, 9.0]})
     saliva.to_csv(ROOT / "saliva.csv", index=False)
