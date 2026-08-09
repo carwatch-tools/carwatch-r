@@ -25,8 +25,10 @@ merge_saliva(
 \item{missing_carwatch_data}{Whether unmatched laboratory rows are ignored or rejected.}
 
 \item{metadata_cols}{Optional laboratory columns to retain as metadata rather
-than numeric measurements. Constant participant-day values are stored at
-the canonical day level; values varying within a day stay sample-level.}
+than numeric measurements. When omitted, non-numeric non-key columns are
+treated as metadata. This is the R equivalent of additional pandas index
+levels. Constant participant-day values are stored at the canonical day
+level; values varying within any day stay sample-level everywhere.}
 }
 \value{
 Complete canonical results with laboratory and merge-provenance fields.

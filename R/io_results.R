@@ -72,6 +72,7 @@ read_study_results <- function(path, tz = "Europe/Berlin", simple = FALSE) {
   values <- tibble::as_tibble(as.data.frame(cells[-(1:4), , drop = FALSE], stringsAsFactors = FALSE), .name_repair = "minimal")
   names(values) <- c("participant", spec$name)
   values$participant <- .as_character_id(values$participant, "Participant IDs")
+  if (anyDuplicated(values$participant)) .carwatch_abort("Saved Study Results contain duplicate participant IDs.", "carwatch_schema_error")
   for (i in seq_len(nrow(spec))) values[[spec$name[[i]]]] <- .parse_result_column(values[[spec$name[[i]]]], spec$variable[[i]], tz)
   result <- new_carwatch_results(values, spec)
   if (!simple) return(result)

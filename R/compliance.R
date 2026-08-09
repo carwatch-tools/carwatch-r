@@ -91,9 +91,12 @@ summarize_compliance <- function(data, group_by = "sample_position") {
   result <- data
   protected <- c("sample_position", "schedule_type", "expected_interval_min", "scheduled_sampling_time")
   for (i in seq_len(nrow(spec))) {
-    key <- spec[i, ]; affected <- targets$participant %in% result$participant & (key$day == targets$day)
-    if (key$sample != "day") affected <- affected & key$sample %in% targets$sample
-    if (drop_entire_day) affected <- result$participant %in% targets$participant & key$day %in% targets$day
+    key <- spec[i, ]
+    affected <- vapply(result$participant, function(participant) {
+      rows <- targets$participant == participant & targets$day == key$day
+      if (!drop_entire_day && key$sample != "day") rows <- rows & targets$sample == key$sample
+      any(rows)
+    }, logical(1))
     if (drop_entire_day || !key$variable %in% protected) result[[key$name]] <- replace(result[[key$name]], affected, NA)
   }
   result
@@ -108,6 +111,7 @@ summarize_compliance <- function(data, group_by = "sample_position") {
 drop_non_compliant_samples <- function(data, drop_entire_day = TRUE, drop_unassessed = FALSE) {
   .assert_scalar_logical(drop_entire_day, "drop_entire_day"); .assert_scalar_logical(drop_unassessed, "drop_unassessed")
   samples <- .as_samples(data); .require_columns(samples, c("participant", "day", "sample_compliant"), "Sample data")
+  if (!is.logical(samples$sample_compliant)) .carwatch_abort("`sample_compliant` must contain TRUE, FALSE, or missing values.", "carwatch_schema_error")
   remove <- samples$sample_compliant %in% FALSE | (drop_unassessed & is.na(samples$sample_compliant))
   if (drop_entire_day) {
     keys <- unique(samples[remove, c("participant", "day")]); remove <- interaction(samples$participant, samples$day, drop = TRUE) %in% interaction(keys$participant, keys$day, drop = TRUE)

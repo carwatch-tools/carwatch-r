@@ -317,7 +317,7 @@ test_that("saliva merge stores explicit metadata at its varying canonical level"
   days <- as_study_days(merged); samples <- as_sample_events(merged)
   expect_identical(days$condition, "challenge")
   expect_equal(samples$assay_batch, c("a", "b"))
-  expect_false("condition" %in% names(samples))
+  expect_identical(samples$condition, c("challenge", "challenge"))
 })
 
 test_that("Study Manager imports retain natural per-day sample positions", {

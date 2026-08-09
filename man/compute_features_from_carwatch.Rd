@@ -7,7 +7,8 @@
 compute_features_from_carwatch(
   data,
   saliva_type = "cortisol",
-  slope_pairs = NULL
+  slope_pairs = NULL,
+  group_levels = NULL
 )
 }
 \arguments{
@@ -16,6 +17,8 @@ compute_features_from_carwatch(
 \item{saliva_type}{Measurement column name.}
 
 \item{slope_pairs}{Sample pairs for slopes.}
+
+\item{group_levels}{Additional R column names that identify separate curves.}
 }
 \value{
 Per participant-day response features.
