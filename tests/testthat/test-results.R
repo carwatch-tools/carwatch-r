@@ -22,12 +22,12 @@ test_that("canonical results round-trip through the three-header CSV", {
 
 test_that("synthetic logs complete the canonical conversion", {
   path <- tempfile("carwatch-synthetic-")
-  generate_synthetic_study_data(path, n_participants = 2, random_state = 1)
+  generate_synthetic_study_data(path, n_participants = 2, random_state = 1, non_compliant_sample_ratio = 0, missing_awakening_time_ratio = 0, missing_sampling_time_ratio = 0)
   folders <- setNames(file.path(path, "logs", c("VP_01", "VP_02")), c("VP_01", "VP_02"))
   imported <- read_raw_logs_from_participant_dirs(folders)
   converted <- convert_raw_logs(imported, errors = "warn", create_report = TRUE)
   expect_s3_class(converted$results, "carwatch_results")
-  expect_equal(nrow(as_sample_events(converted$results)), 16)
+  expect_equal(nrow(as_sample_events(converted$results)), 32)
   expect_equal(nrow(converted$report$issues), 0)
 })
 

@@ -855,7 +855,15 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("rai
       }
       if (event$action[[1]] == "barcode_scanned") collection_started <- TRUE
       if (event$action[[1]] %in% c("spontaneous_awakening", "alarm")) {
-        awakening_day_counter <- awakening_day_counter + 1L
+        event_date <- as.Date(event$timestamp[[1]], tz = timezone)
+        same_date_scan <- events$action == "barcode_scanned" & as.Date(events$timestamp, tz = timezone) == event_date
+        expected_days <- unique(vapply(events$payload[same_date_scan], function(payload) suppressWarnings(as.integer(.payload_value(payload, "day_expected", NA_integer_))), integer(1)))
+        expected_days <- expected_days[!is.na(expected_days)]
+        if (length(expected_days) == 1L) {
+          awakening_day_counter <- expected_days[[1]]
+        } else {
+          awakening_day_counter <- awakening_day_counter + 1L
+        }
         day_row <- dplyr::filter(schedule, .data$registration == .env$active_registration, .data$registration_day == .env$awakening_day_counter)
         day <- if (nrow(day_row)) day_row$day[[1]] else NA_character_
       } else {
