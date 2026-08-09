@@ -163,19 +163,31 @@ read_raw_logs_from_participant_dirs <- function(participant_dirs, tz = "Europe/B
   list(selected = selected, audit = audit)
 }
 
+.read_zip_member_lines <- function(path, member) {
+  member_info <- utils::unzip(path, list = TRUE)
+  member_size <- member_info$Length[match(member, member_info$Name)]
+  if (is.na(member_size)) {
+    .carwatch_abort(sprintf("ZIP member does not exist: %s!%s", path, member), "carwatch_parse_error")
+  }
+
+  con <- unz(path, member, open = "rb")
+  on.exit(close(con), add = TRUE)
+  contents <- rawToChar(readBin(con, what = "raw", n = member_size))
+  text_con <- textConnection(contents, open = "r", local = TRUE)
+  on.exit(close(text_con), add = TRUE)
+  readLines(text_con, warn = FALSE)
+}
+
 .read_raw_log_path <- function(path, tz, errors, archive_member = NA_character_) {
   extension <- tolower(fs::path_ext(path))
   if (!is.na(archive_member)) {
-    con <- unz(path, archive_member, open = "rt"); on.exit(close(con), add = TRUE)
-    return(.parse_raw_log_text(readLines(con, warn = FALSE), paste0(fs::path_file(path), "!", archive_member), tz, errors))
+    return(.parse_raw_log_text(.read_zip_member_lines(path, archive_member), paste0(fs::path_file(path), "!", archive_member), tz, errors))
   }
   if (extension == "zip") {
     members <- utils::unzip(path, list = TRUE)$Name
     members <- members[grepl("\\.csv$", members, ignore.case = TRUE) & !grepl("(^|/)\\.", members)]
     return(unlist(lapply(members, function(member) {
-      con <- unz(path, member, open = "rt")
-      on.exit(close(con), add = TRUE)
-      .parse_raw_log_text(readLines(con, warn = FALSE), paste0(fs::path_file(path), "!", member), tz, errors)
+      .parse_raw_log_text(.read_zip_member_lines(path, member), paste0(fs::path_file(path), "!", member), tz, errors)
     }), recursive = FALSE))
   }
   if (extension != "csv") .carwatch_abort(sprintf("Raw log source must be CSV or ZIP: %s", path), "carwatch_value_error")
