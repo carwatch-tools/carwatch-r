@@ -20,10 +20,9 @@ jobs:
           r-version: ${{ matrix.r }}
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::covr, any::shinytest2
+          extra-packages: any::rcmdcheck, any::covr, any::shinytest2
       - uses: r-lib/actions/check-r-package@v2
         with:
-          error-on: 'warning'
           args: 'c("--no-manual", "--as-cran")'
 
   python-parity-oracle:
