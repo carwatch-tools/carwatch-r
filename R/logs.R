@@ -390,6 +390,20 @@ summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("r
   long
 }
 
+.missing_long_value <- function(value) {
+  if (inherits(value, "POSIXt")) return(as.POSIXct(NA, tz = attr(value, "tzone") %||% "UTC"))
+  if (inherits(value, "Date")) return(as.Date(NA))
+  if (is.integer(value)) return(NA_integer_)
+  if (is.double(value)) return(NA_real_)
+  if (is.logical(value)) return(NA)
+  NA_character_
+}
+
+.blank_long_rows <- function(long, rows) {
+  for (row in rows) long$value[[row]] <- .missing_long_value(long$value[[row]])
+  long
+}
+
 .manual_timestamp <- function(manual_diary, participant, day, column, timezone) {
   if (is.null(manual_diary)) .carwatch_abort("A conversion decision requires a manual diary.", "carwatch_value_error")
   .require_columns(manual_diary, c("participant", "day", column), "Manual diary")
@@ -663,7 +677,7 @@ summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("r
       timestamp <- if (from_diary) .manual_timestamp(manual_diary, participant, day, "awakening_time", timezone) else .parse_local_time(if (nchar(value) == 16L) paste0(value, ":00") else value, timezone, "conversion decision awakening time")
       long <- .replace_long_value(long, participant, day, "day", "awakening_time", timestamp)
       long <- .replace_long_value(long, participant, day, "day", "date", as.POSIXct(as.Date(timestamp), tz = timezone))
-      long <- .replace_long_value(long, participant, day, "day", "awakening_type", if (from_diary) "manual_diary" else "decision")
+      long <- .replace_long_value(long, participant, day, "day", "awakening_type", if (from_diary) "manual_diary" else "manual_override")
     }
     sample_patch <- item$code[[1]] == "missing_scheduled_sample_event" && ((action == "accept" && item$proposed_action[[1]] == "use_manual_diary_sampling_time") || (action == "change" && value %in% c("use_manual_diary_sampling_time", "use_default")))
     if (sample_patch) {
@@ -731,13 +745,14 @@ summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("r
 #' @param compliance_checker Timing tolerance configuration.
 #' @return Canonical results, or a results/report list.
 #' @export
-convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("error", "warn"), create_report = FALSE, issue_decisions = NULL, sampling_schedule = NULL, manual_diary = NULL, check_compliance = TRUE, compliance_checker = new_sampling_compliance_checker()) {
-  errors <- match.arg(errors, c("raise", "warn", "error")); if (identical(errors, "error")) errors <- "raise"
+convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("raise", "warn", "error"), create_report = FALSE, issue_decisions = NULL, sampling_schedule = NULL, manual_diary = NULL, check_compliance = TRUE, compliance_checker = new_sampling_compliance_checker()) {
+  errors <- match.arg(errors); if (identical(errors, "error")) errors <- "raise"
   .assert_scalar_logical(create_report, "create_report"); .assert_scalar_logical(check_compliance, "check_compliance")
   .require_columns(raw_logs, c("participant", "timestamp", "action", "payload", "source_file"), "Raw logs")
+  report_state <- .new_conversion_report(raw_logs, issue_decisions)
   raw_logs <- .deduplicate_raw_events(raw_logs)
   decision_frame <- if (is.null(issue_decisions)) NULL else .normalize_issue_decisions(issue_decisions)
-  report_state <- .new_conversion_report(raw_logs, decision_frame)
+  report_state$decisions <- if (is.null(decision_frame)) report_state$decisions else decision_frame
   schedule <- .registration_schedule(raw_logs, protocol_manifest)
   protocol <- .protocol_from_logs(raw_logs, protocol_manifest)
   participants <- sort(unique(.as_character_id(raw_logs$participant, "Raw-log participant IDs")))
@@ -1053,14 +1068,25 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("err
       remove_days <- selected[selected$effective_action == "drop_day", c("participant", "day"), drop = FALSE]
       remove_samples <- selected[selected$effective_action == "drop_sample", c("participant", "day", "sample_id"), drop = FALSE]
       keep <- !long$participant %in% remove_participants
-      if (nrow(remove_days)) keep <- keep & !paste(long$participant, long$day, sep = "\r") %in% paste(remove_days$participant, remove_days$day, sep = "\r")
-      if (nrow(remove_samples)) keep <- keep & !(long$sample != "day" & paste(long$participant, long$day, long$sample, sep = "\r") %in% paste(remove_samples$participant, remove_samples$day, remove_samples$sample_id, sep = "\r"))
       long <- long[keep, , drop = FALSE]
+      if (nrow(remove_days)) {
+        day_rows <- paste(long$participant, long$day, sep = "\r") %in% paste(remove_days$participant, remove_days$day, sep = "\r")
+        long <- .blank_long_rows(long, which(day_rows))
+      }
+      if (nrow(remove_samples)) {
+        sample_rows <- long$sample != "day" & paste(long$participant, long$day, long$sample, sep = "\r") %in% paste(remove_samples$participant, remove_samples$day, remove_samples$sample_id, sep = "\r")
+        long <- .blank_long_rows(long, which(sample_rows))
+      }
       results <- .from_long_results(long, setdiff(participants, remove_participants))
     }
   }
-  if (errors == "raise" && nrow(report_state$issues) && is.null(issue_decisions)) .carwatch_abort("Raw-log conversion encountered unresolved issues. Run with `errors = 'warn'` and `create_report = TRUE` to review them.", "carwatch_schema_error")
-  if (create_report) return(list(results = results, report = .report_finalize(report_state, results, schedule, sum(!is.na(as_sample_events(results)$sampling_time)))))
+  finalized_report <- .report_finalize(report_state, results, schedule, sum(!is.na(as_sample_events(results)$sampling_time)))
+  unresolved <- finalized_report$issues$resolution_status == "unresolved"
+  if (nrow(finalized_report$issues) && any(unresolved)) {
+    if (errors == "raise") .carwatch_abort(finalized_report$issues$message[which(unresolved)[[1]]], "carwatch_schema_error")
+    for (message in finalized_report$issues$message[unresolved]) rlang::warn(message, class = "carwatch_conversion_warning")
+  }
+  if (create_report) return(list(results = results, report = finalized_report))
   results
 }
 

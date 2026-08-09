@@ -185,7 +185,7 @@ test_that("an explicit awakening-time decision does not require a diary", {
   final <- convert_raw_logs(raw, errors = "raise", create_report = TRUE, issue_decisions = decisions)
   days <- as_study_days(final$results)
   expect_identical(format(days$awakening_time[[1]], "%Y-%m-%d %H:%M"), "2025-05-15 06:00")
-  expect_identical(days$awakening_type[[1]], "decision")
+  expect_identical(days$awakening_type[[1]], "manual_override")
 })
 
 test_that("use_default uses the supplied fallback schedule only when needed", {

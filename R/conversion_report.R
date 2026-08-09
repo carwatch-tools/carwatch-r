@@ -55,6 +55,10 @@
   if (any(parameterized)) .carwatch_abort("Parameterized issue decisions require `user_decision_value`.", "carwatch_value_error")
   legacy <- frame$user_decision_value %in% c("patch_sampling_time", "patch_awakening_time")
   if (any(legacy)) .carwatch_abort("Issue decisions use obsolete manual-diary action names. Regenerate the conversion report.", "carwatch_value_error")
+  if ("proposed_action" %in% names(frame)) {
+    legacy_actions <- trimws(as.character(frame$proposed_action)) %in% c("patch_sampling_time", "patch_awakening_time")
+    if (any(legacy_actions)) .carwatch_abort("Issue decisions use obsolete proposed actions. Regenerate the conversion report.", "carwatch_value_error")
+  }
   change <- frame$user_decision == "change"
   unsupported_change <- change & !frame$code %in% c(
     "multiple_collection_dates", "possible_reregistration",
@@ -156,7 +160,7 @@
     priority <- match(issues$code, .conversion_issue_codes, nomatch = length(.conversion_issue_codes) + 1L)
     issues <- issues[order(issues$participant != "__cohort__", tolower(issues$participant), issues$day, issues$sample_id, priority, tolower(issues$code), issues$registration, issues$registration_day, issues$sample_position, issues$issue_id, na.last = TRUE), , drop = FALSE]
   }
-  list(summary = list(input_event_count = report$input_event_count, input_participant_count = report$input_participant_count, input_source_file_count = report$input_source_file_count, output_participant_count = nrow(results), canonical_day_count = dplyr::n_distinct(schedule$day), expected_sample_position_count = nrow(schedule), recorded_sample_event_count = as.integer(recorded_sample_event_count), issue_count = nrow(issues)), issues = issues)
+  list(summary = list(input_event_count = report$input_event_count, input_participant_count = report$input_participant_count, input_source_file_count = report$input_source_file_count, output_participant_count = nrow(results), canonical_day_count = dplyr::n_distinct(schedule$day), expected_sample_position_count = nrow(schedule) * report$input_participant_count, recorded_sample_event_count = as.integer(recorded_sample_event_count), issue_count = nrow(issues)), issues = issues)
 }
 
 .decision_for_scope <- function(decisions, participant, day = NA_character_, sample_id = NA_character_) {
