@@ -49,7 +49,15 @@ new_sampling_compliance_checker <- function(awakening_delay_tolerance_min = 5, s
 #' @export
 find_sampling_anomalies <- function(data) {
   samples <- .as_samples(data)
-  .require_columns(samples, c("sample_mismatch", "day_expected", "day_scanned"), "Sample data")
+  .require_columns(samples, c("day_expected", "day_scanned"), "Sample data")
+  # Canonical conversion retains the scheduled ID as `sample` and the app
+  # observation as `recorded_sample`. Derive the inspection flag at this
+  # boundary instead of requiring a redundant storage variable.
+  if (!"sample_mismatch" %in% names(samples)) {
+    .require_columns(samples, c("sample", "recorded_sample"), "Sample data")
+    samples$sample_mismatch <- !is.na(samples$recorded_sample) &
+      samples$recorded_sample != samples$sample
+  }
   samples$day_mismatch <- !is.na(samples$day_expected) & !is.na(samples$day_scanned) & samples$day_expected != samples$day_scanned
   dplyr::filter(samples, .data$sample_mismatch %in% TRUE | .data$day_mismatch)
 }
