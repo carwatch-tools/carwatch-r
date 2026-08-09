@@ -1,6 +1,6 @@
 Package: carwatch
 Title: Registration-Aware Processing of CARWatch Sampling Logs and Saliva Data
-Version: 0.0.0.9000
+Version: 1.0.0
 Authors@R: 
     person("Robert", "Richer", email = "robert.richer@fau.de", role = c("aut", "cre"))
 Author: Robert Richer [aut, cre]
