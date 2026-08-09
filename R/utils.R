@@ -14,6 +14,11 @@ utils::globalVariables(c(".data", ".env"))
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
+.timezone_or_default <- function(value, default = "Europe/Berlin") {
+  zone <- attr(value, "tzone")
+  if (is.null(zone) || !length(zone) || is.na(zone[[1]]) || !nzchar(zone[[1]])) default else zone[[1]]
+}
+
 .assert_scalar_logical <- function(value, name) {
   if (!is.logical(value) || length(value) != 1L || is.na(value)) {
     .carwatch_abort(sprintf("`%s` must be TRUE or FALSE.", name), "carwatch_type_error")
@@ -65,10 +70,12 @@ utils::globalVariables(c(".data", ".env"))
       "carwatch_schema_error"
     )
   )
-  if (require_midnight && any(!is.na(parsed) & format(parsed, "%H:%M:%S") != "00:00:00")) {
+  if (require_midnight && any(!is.na(parsed) & format(parsed, "%H:%M:%S", tz = tz) != "00:00:00")) {
     .carwatch_abort(sprintf("%s values must be local midnight.", name), "carwatch_schema_error")
   }
-  as.POSIXct(parsed)
+  result <- as.POSIXct(parsed)
+  attr(result, "tzone") <- tz
+  result
 }
 
 .natural_order <- function(x) {

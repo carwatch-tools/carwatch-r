@@ -96,7 +96,7 @@ write_study_results <- function(data, path) {
   rendered <- as.data.frame(data, stringsAsFactors = FALSE)
   for (name in spec$name) {
     value <- rendered[[name]]
-    if (inherits(value, "POSIXt")) value <- format(value, "%Y-%m-%d %H:%M:%S%z", tz = attr(value, "tzone") %||% "Europe/Berlin")
+    if (inherits(value, "POSIXt")) value <- format(value, "%Y-%m-%d %H:%M:%S%z", tz = .timezone_or_default(value))
     rendered[[name]] <- ifelse(is.na(value), "", as.character(value))
   }
   rendered$participant <- .as_character_id(rendered$participant, "Participant IDs")
