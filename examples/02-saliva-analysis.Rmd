@@ -1,0 +1,100 @@
+---
+title: "CARWatch saliva merge and analysis"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+This walkthrough mirrors the Python cortisol-merge notebook. It generates the
+same deterministic local inputs, completes the decision-controlled conversion,
+merges position-indexed cortisol measurements, computes response features, and
+produces static plots.
+
+```{r setup}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(carwatch)
+
+study_dir <- file.path(tempdir(), "carwatch-r-saliva-example")
+```
+
+## Build complete Study Results
+
+The merge and feature APIs require complete canonical results, never the
+display-only `simple = TRUE` form.
+
+```{r conversion}
+generate_synthetic_study_data(
+  study_dir,
+  n_participants = 4,
+  random_state = 42,
+  missing_sampling_time_ratio = 0.10,
+  create_cortisol_data = TRUE,
+  overwrite = TRUE
+)
+
+folders <- list.dirs(file.path(study_dir, "logs"), recursive = FALSE, full.names = TRUE)
+participant_dirs <- stats::setNames(folders, basename(folders))
+raw_logs <- read_raw_logs_from_participant_dirs(participant_dirs)
+decisions <- read_conversion_report(file.path(study_dir, "issue_decisions.csv"))
+manual_diary <- read_manual_diary(file.path(study_dir, "manual_diary.csv"))
+
+study_results <- convert_raw_logs(
+  raw_logs,
+  errors = "raise",
+  issue_decisions = decisions,
+  manual_diary = manual_diary
+)
+```
+
+## Merge laboratory data by sample position
+
+The generated cortisol file is position-indexed. Position is protocol metadata,
+not a property inferred from an opaque tube ID.
+
+```{r merge}
+cortisol <- readr::read_csv(
+  file.path(study_dir, "cortisol.csv"),
+  show_col_types = FALSE
+)
+
+merged_results <- merge_saliva(
+  study_results,
+  cortisol,
+  match_on = "position"
+)
+
+head(as_sample_events(merged_results))
+```
+
+For a laboratory file keyed by physical ID instead, use `read_saliva()` and
+`match_on = "sample"`. CARWatch uses `recorded_sample` to correct documented
+swaps when `correct_swaps = TRUE`.
+
+## Restrict to compliant observations and compute features
+
+```{r features}
+analysis_results <- drop_non_compliant_samples(merged_results)
+summarize_compliance(merged_results)
+find_sampling_anomalies(merged_results)
+
+cortisol_features <- compute_features_from_carwatch(
+  analysis_results,
+  saliva_type = "cortisol"
+)
+cortisol_features
+```
+
+## Plot timing and cortisol response
+
+```{r plots, fig.width=9, fig.height=5}
+plot_saliva_curve(merged_results, value = "cortisol")
+plot_timing_deviation(merged_results)
+```
+
+Save complete merged results and features as ordinary analysis artifacts.
+
+```{r save}
+write_study_results(merged_results, file.path(study_dir, "study_results_cortisol.csv"))
+readr::write_csv(cortisol_features, file.path(study_dir, "cortisol_features.csv"), na = "")
+```

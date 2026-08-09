@@ -1,0 +1,141 @@
+---
+title: "CARWatch raw-log processing"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+This walkthrough mirrors the Python log-processing notebook using the native R
+API. It creates a deterministic local study, imports immutable raw logs,
+inspects the advisory conversion report, applies the generated decisions and
+manual diary, then writes complete Study Results.
+
+```{r setup}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(carwatch)
+
+# Use a disposable directory. Set this to a project data directory for a real
+# study, then retain the generated report and final results as audit artifacts.
+study_dir <- file.path(tempdir(), "carwatch-r-log-example")
+```
+
+## Create local example inputs
+
+`generate_synthetic_study_data()` creates raw app exports, a manual diary,
+submitted decisions, and position-indexed cortisol measurements. It does not
+modify an existing directory unless `overwrite = TRUE` is explicit.
+
+```{r generate}
+generate_synthetic_study_data(
+  study_dir,
+  n_participants = 4,
+  random_state = 42,
+  missing_sampling_time_ratio = 0.10,
+  create_cortisol_data = TRUE,
+  overwrite = TRUE
+)
+
+list.files(study_dir, recursive = TRUE)
+```
+
+## Import raw logs and source audit
+
+For real studies, replace `study_dir` with one folder per participant. The
+participant identifier comes from the explicit folder mapping, not from a tube
+ID or a filename pattern.
+
+```{r import}
+participant_folders <- list.dirs(file.path(study_dir, "logs"),
+  recursive = FALSE, full.names = TRUE
+)
+participant_dirs <- stats::setNames(
+  participant_folders,
+  basename(participant_folders)
+)
+
+imported <- read_raw_logs_from_participant_dirs(
+  participant_dirs,
+  create_report = TRUE
+)
+raw_logs <- imported$raw_logs
+source_audit <- imported$source_audit
+
+summarize_source_audit(source_audit)
+```
+
+## First pass: advisory conversion report
+
+The first pass records issues but does not execute its prefilled recommended
+actions. Raw logs remain unchanged. Export this table for spreadsheet review in
+a real study and preserve every context column and `issue_id`.
+
+```{r advisory}
+advisory <- convert_raw_logs(
+  raw_logs,
+  errors = "warn",
+  create_report = TRUE
+)
+
+advisory$report$summary
+advisory$report$issues
+
+report_path <- file.path(study_dir, "conversion_issues_advisory.csv")
+readr::write_csv(advisory$report$issues, report_path, na = "")
+report_path
+```
+
+## Second pass: submitted decisions and manual diary
+
+The synthetic data include a ready-to-submit report. `read_conversion_report()`
+validates decision values and stable IDs. In a real study, edit only
+`user_decision` and `user_decision_value`, then read the edited CSV here.
+
+```{r final-conversion}
+decisions <- read_conversion_report(file.path(study_dir, "issue_decisions.csv"))
+manual_diary <- read_manual_diary(file.path(study_dir, "manual_diary.csv"))
+
+final <- convert_raw_logs(
+  raw_logs,
+  errors = "raise",
+  create_report = TRUE,
+  issue_decisions = decisions,
+  manual_diary = manual_diary
+)
+study_results <- final$results
+
+final$report$summary
+final$report$issues
+```
+
+## Inspect and save complete results
+
+Keep `carwatch_results` complete. `as_study_days()` and
+`as_sample_events()` are inspection views; they do not replace the canonical
+wide object.
+
+```{r inspect-save}
+study_days <- as_study_days(study_results)
+sample_events <- as_sample_events(study_results)
+
+head(study_days)
+head(sample_events)
+
+results_path <- file.path(study_dir, "study_results.csv")
+write_study_results(study_results, results_path)
+
+# Python-generated and R-generated complete CSV files use this same format.
+restored <- read_study_results(results_path)
+identical(study_results, restored)
+```
+
+## Quality control
+
+```{r quality-control, fig.width=9, fig.height=5}
+plot_sampling_timeline(study_results, participant = names(participant_dirs)[[1]], day = "D1")
+plot_compliance_overview(study_results)
+plot_timing_deviation(study_results)
+```
+
+The next walkthrough starts from `study_results.csv` and merges the generated
+laboratory data.

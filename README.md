@@ -13,6 +13,10 @@ This is a native R port of Python carwatch 1.0.0. It is usable for the workflow
 below but is not yet behavior-complete. See [PORT_STATUS.md](PORT_STATUS.md)
 for the explicit parity boundary.
 
+Executable R Markdown walkthroughs are in [examples/](examples/). Start with
+[the R Markdown workflow guide](docs/rmarkdown-workflows.md) for rendering,
+inputs, and the two-pass decision boundary.
+
 - Import CSV logs, ZIP archives, and participant-folder exports.
 - Reconstruct canonical study days, sampling positions, and timing compliance.
 - Create and reload auditable conversion-issue reports.

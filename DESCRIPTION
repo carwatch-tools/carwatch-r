@@ -29,6 +29,7 @@ Suggests:
     covr,
     DT,
     pkgdown,
+    rmarkdown,
     roxygen2,
     shiny,
     shinytest2,

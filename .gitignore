@@ -6,6 +6,8 @@
 *.Rcheck/
 *.tar.gz
 docs/
+!docs/
+!docs/rmarkdown-workflows.md
 inst/doc/
 covr/
 test-results/
