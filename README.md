@@ -41,6 +41,13 @@ install.packages("remotes")
 remotes::install_github("carwatch-tools/carwatch-r")
 ~~~
 
+Install the optional interactive dependencies for the Shiny timeline and
+conversion-report editor:
+
+~~~r
+install.packages(c("shiny", "DT"))
+~~~
+
 To install this checkout locally:
 
 ~~~sh
@@ -99,7 +106,7 @@ initial <- convert_raw_logs(
   create_report = TRUE
 )
 initial$report$summary
-write.csv(initial$report$issues, "conversion_issues.csv", row.names = FALSE)
+write_conversion_report(initial$report, "conversion_issues.csv")
 ~~~
 
 The prefilled accept values are recommendations. They do not modify raw events
@@ -218,7 +225,9 @@ merged_results <- merge_saliva(
 )
 ~~~
 
-Pass laboratory metadata explicitly through `metadata_cols`. A value that is
+Non-numeric non-key columns are inferred as laboratory metadata. Use
+`metadata_cols` to classify metadata explicitly when its R storage type is
+numeric or otherwise ambiguous. A value that is
 constant for a participant-day is retained as a day-level canonical variable;
 a value that varies by tube stays sample-level. This is the R replacement for
 Python pandas index-level metadata.
@@ -253,8 +262,27 @@ plot_saliva_curve(merged_results, value = "cortisol")
 ~~~
 
 For generic long-format saliva data, use compute_features, auc, max_value,
-initial_value, max_increase, or slope. Interactive Shiny/DT tools are planned
-and intentionally excluded from this noninteractive port.
+initial_value, max_increase, or slope.
+
+### Interactive review
+
+Launch a participant/day selector around the same static timeline used in
+reports:
+
+~~~r
+interactive_sampling_timeline(study_results)
+~~~
+
+Edit a first-pass conversion report with issue-specific decision choices. The
+gadget returns a validated issue tibble when `Done` is pressed.
+
+~~~r
+decisions <- conversion_report_editor(initial$report)
+write_conversion_report(decisions, "conversion_issues.csv")
+~~~
+
+Set `launch = FALSE` on either function to obtain a `shiny.appobj` for
+deployment, embedding, or automated smoke tests.
 
 ## Synthetic data
 
