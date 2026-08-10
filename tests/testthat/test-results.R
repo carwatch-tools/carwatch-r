@@ -1,4 +1,8 @@
 test_that("canonical results round-trip through the three-header CSV", {
+  previous_tz <- Sys.getenv("TZ", unset = NA_character_)
+  on.exit(if (is.na(previous_tz)) Sys.unsetenv("TZ") else Sys.setenv(TZ = previous_tz), add = TRUE)
+  Sys.setenv(TZ = "UTC")
+
   long <- tibble::tibble(
     participant = c("vp01", "vp01", "vp01", "vp01"),
     day = c("D1", "D1", "D1", "D1"),
@@ -16,6 +20,7 @@ test_that("canonical results round-trip through the three-header CSV", {
   write_study_results(original, path)
   restored <- read_study_results(path)
   expect_s3_class(restored, "carwatch_results")
+  expect_equal(as_study_days(restored)$date, as.POSIXct("2026-02-01", tz = "Europe/Berlin"))
   expect_equal(as_sample_events(restored)$cortisol, 12.5)
   expect_equal(as_sample_events(restored)$sample_position, 1L)
 })
@@ -185,7 +190,7 @@ test_that("an explicit awakening-time decision does not require a diary", {
   final <- convert_raw_logs(raw, errors = "raise", create_report = TRUE, issue_decisions = decisions)
   days <- as_study_days(final$results)
   expect_identical(format(days$awakening_time[[1]], "%Y-%m-%d %H:%M"), "2025-05-15 06:00")
-  expect_identical(days$awakening_type[[1]], "decision")
+  expect_identical(days$awakening_type[[1]], "manual_override")
 })
 
 test_that("use_default uses the supplied fallback schedule only when needed", {

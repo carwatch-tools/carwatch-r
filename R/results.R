@@ -86,7 +86,7 @@ print.carwatch_results <- function(x, ...) {
     if (anyDuplicated(current$participant)) .carwatch_abort("Long Study Results contain duplicate participant/day/sample/variable values.", "carwatch_schema_error")
     positions <- match(wide$participant, current$participant)
     template <- vctrs::vec_c(!!!current$value)
-    value <- if (length(template) && inherits(template, "POSIXt")) as.POSIXct(rep(NA, nrow(wide)), origin = "1970-01-01", tz = attr(template, "tzone") %||% "Europe/Berlin") else rep(NA, nrow(wide))
+    value <- if (length(template) && inherits(template, "POSIXt")) as.POSIXct(rep(NA, nrow(wide)), origin = "1970-01-01", tz = .timezone_or_default(template)) else rep(NA, nrow(wide))
     if (length(template)) value[!is.na(positions)] <- template[positions[!is.na(positions)]]
     wide[[key$name]] <- value
   }
@@ -132,7 +132,7 @@ as_study_days <- function(data) {
     current_key <- do.call(paste, c(current[keys], sep = "\r"))
     result_key <- do.call(paste, c(result[keys], sep = "\r"))
     positions <- match(result_key, current_key)
-    output <- if (inherits(current_value, "POSIXt")) as.POSIXct(rep(NA, nrow(result)), origin = "1970-01-01", tz = attr(current_value, "tzone") %||% "Europe/Berlin") else vctrs::vec_init(current_value, nrow(result))
+    output <- if (inherits(current_value, "POSIXt")) as.POSIXct(rep(NA, nrow(result)), origin = "1970-01-01", tz = .timezone_or_default(current_value)) else vctrs::vec_init(current_value, nrow(result))
     output[!is.na(positions)] <- current_value[positions[!is.na(positions)]]
     result[[current_variable]] <- output
   }

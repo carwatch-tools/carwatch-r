@@ -5,13 +5,33 @@ reference:
   - title: Data import and conversion
     contents:
       - starts_with("read_")
+      - starts_with("write_")
       - convert_raw_logs
       - starts_with("extract_")
       - summarize_protocol
+      - summarize_source_audit
   - title: Analysis
     contents:
       - merge_saliva
+      - summarize_compliance
+      - find_non_compliant_samples
+      - drop_non_compliant_samples
+      - find_sampling_anomalies
       - starts_with("compute_")
       - auc
       - slope
       - starts_with("plot_")
+  - title: Synthetic data
+    contents:
+      - starts_with("generate_synthetic_")
+  - title: Results and feature helpers
+    contents:
+      - new_carwatch_results
+      - as_study_days
+      - as_sample_events
+      - new_sampling_compliance_checker
+      - initial_value
+      - max_value
+      - max_increase
+      - mean_se
+      - standard_features

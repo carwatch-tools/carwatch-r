@@ -121,3 +121,55 @@ test_that("conversion reports retain complete issue-specific context", {
   missing <- issues[issues$code == "missing_scheduled_sample_event", , drop = FALSE]
   expect_true(all(c("registered_at", "source_files", "saliva_times", "saliva_absolute_times") %in% names(jsonlite::fromJSON(missing$details[[1]], simplifyVector = FALSE))))
 })
+
+test_that("conversion summaries count raw evidence and participant schedules", {
+  raw <- tibble::tibble(
+    participant = c("p1", "p1", "p2", "p2", "p2"),
+    timestamp = as.POSIXct(c(
+      "2025-05-15 05:00:00", "2025-05-15 06:00:00",
+      "2025-05-15 05:00:00", "2025-05-15 06:00:00", "2025-05-15 06:00:00"
+    ), tz = "Europe/Berlin"),
+    action = c("study_metadata", "barcode_scanned", "study_metadata", "barcode_scanned", "barcode_scanned"),
+    payload = list(
+      list(study_name = "study", saliva_ids = c("s1", "s2"), saliva_times = c(0, 30), study_days = 1),
+      list(sample_expected = "s1", sample_scanned = "s1", day_expected = 1),
+      list(study_name = "study", saliva_ids = c("s1", "s2"), saliva_times = c(0, 30), study_days = 1),
+      list(sample_expected = "s1", sample_scanned = "s1", day_expected = 1),
+      list(sample_expected = "s1", sample_scanned = "s1", day_expected = 1)
+    ),
+    source_file = c("p1.csv", "p1.csv", "p2.csv", "p2.csv", "p2-copy.csv")
+  )
+  converted <- suppressWarnings(convert_raw_logs(raw, errors = "warn", create_report = TRUE))
+  expect_identical(converted$report$summary$input_event_count, 5L)
+  expect_identical(converted$report$summary$input_participant_count, 2L)
+  expect_identical(converted$report$summary$input_source_file_count, 3L)
+  expect_identical(converted$report$summary$expected_sample_position_count, 4L)
+})
+
+test_that("warning and strict modes expose unresolved conversion issues", {
+  raw <- tibble::tibble(
+    participant = "p1",
+    timestamp = as.POSIXct("2025-05-15 05:00:00", tz = "Europe/Berlin"),
+    action = "study_metadata",
+    payload = list(list(study_name = "study", saliva_ids = "s1", saliva_times = 0, study_days = 1)),
+    source_file = "one.csv"
+  )
+  expect_warning(
+    advisory <- convert_raw_logs(raw, errors = "warn", create_report = TRUE),
+    class = "carwatch_conversion_warning"
+  )
+  decisions <- advisory$report$issues
+  decisions$user_decision <- ""
+  expect_error(
+    convert_raw_logs(raw, errors = "raise", issue_decisions = decisions),
+    class = "carwatch_schema_error"
+  )
+})
+
+test_that("obsolete proposed actions are rejected at the report boundary", {
+  decisions <- tibble::tibble(
+    participant = "p1", issue_id = "issue-1", code = "missing_scheduled_sample_event",
+    user_decision = "keep", user_decision_value = "", proposed_action = "patch_sampling_time"
+  )
+  expect_error(carwatch:::.normalize_issue_decisions(decisions), "obsolete proposed actions")
+})

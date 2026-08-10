@@ -7,7 +7,7 @@
 convert_raw_logs(
   raw_logs,
   protocol_manifest = NULL,
-  errors = c("error", "warn"),
+  errors = c("raise", "warn", "error"),
   create_report = FALSE,
   issue_decisions = NULL,
   sampling_schedule = NULL,
