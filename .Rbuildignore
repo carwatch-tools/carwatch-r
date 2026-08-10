@@ -11,3 +11,4 @@
 ^PORT_STATUS\.md$
 ^renv$
 ^tests/testthat/_snaps$
+^tools/render_examples\.R$

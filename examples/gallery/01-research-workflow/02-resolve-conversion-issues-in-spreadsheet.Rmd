@@ -1,0 +1,63 @@
+---
+title: "Resolve conversion issues through a CSV report"
+output: html_document
+---
+
+CARWatch conversion is a two-pass process. The first pass creates an advisory
+report. Only a report supplied to the second pass executes decisions.
+
+```{r setup}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(carwatch)
+
+study_dir <- file.path(tempdir(), "carwatch-gallery-spreadsheet-decisions")
+generate_synthetic_study_data(
+  study_dir,
+  n_participants = 3,
+  missing_awakening_time_ratio = 0.05,
+  missing_sampling_time_ratio = 0.10,
+  random_state = 42,
+  overwrite = TRUE,
+  validate = FALSE
+)
+
+folders <- list.dirs(file.path(study_dir, "logs"), recursive = FALSE, full.names = TRUE)
+participant_dirs <- stats::setNames(folders, basename(folders))
+raw_logs <- read_raw_logs_from_participant_dirs(participant_dirs)
+```
+
+## Export the advisory report
+
+```{r advisory}
+advisory <- suppressWarnings(convert_raw_logs(
+  raw_logs,
+  errors = "warn",
+  create_report = TRUE
+))
+
+report_path <- file.path(study_dir, "conversion_issues_for_review.csv")
+write_conversion_report(advisory$report, report_path)
+advisory$report$issues[, c("issue_id", "code", "proposed_action", "resolution_status")]
+```
+
+Edit only `user_decision` and `user_decision_value`. Do not alter `issue_id` or
+the context columns. The generated study also contains a reviewed report so the
+example can execute without manual spreadsheet interaction.
+
+## Apply submitted decisions
+
+```{r submitted}
+decisions <- read_conversion_report(file.path(study_dir, "issue_decisions.csv"))
+manual_diary <- read_manual_diary(file.path(study_dir, "manual_diary.csv"))
+
+final <- convert_raw_logs(
+  raw_logs,
+  errors = "raise",
+  create_report = TRUE,
+  issue_decisions = decisions,
+  manual_diary = manual_diary
+)
+
+final$report$issues[, c("issue_id", "code", "resolution_status")]
+head(as_sample_events(final$results))
+```

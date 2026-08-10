@@ -15,9 +15,10 @@ workflow, and three-header CSV interchange while exposing R-native tibbles,
 S3 results, ggplot2 figures, and Shiny/DT tools. See
 [PORT_STATUS.md](PORT_STATUS.md) for the exact parity boundary.
 
-Executable R Markdown walkthroughs are in [examples/](examples/). Start with
-[the R Markdown workflow guide](docs/rmarkdown-workflows.md) for rendering,
-inputs, and the two-pass decision boundary.
+The [examples directory](examples/) contains four end-to-end R Markdown
+walkthroughs and nine focused gallery workflows matching the Python example
+catalogue. Start with [the R Markdown workflow guide](docs/rmarkdown-workflows.md)
+for installation, rendering, inputs, and the two-pass decision boundary.
 
 - Import CSV logs, ZIP archives, and participant-folder exports.
 - Reconstruct canonical study days, sampling positions, and timing compliance.

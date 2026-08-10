@@ -1,0 +1,97 @@
+---
+title: "Interactive CARWatch log processing with synthetic data"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+This R-native counterpart to the Python interactive notebook creates a
+synthetic study, builds an advisory conversion report, and prepares the Shiny
+conversion editor and participant-day timeline. Rendering does not launch a
+server; run the final calls interactively to open each app.
+
+```{r setup}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(carwatch)
+
+if (!requireNamespace("shiny", quietly = TRUE) ||
+    !requireNamespace("DT", quietly = TRUE)) {
+  stop("Install the optional packages with install.packages(c('shiny', 'DT')).")
+}
+
+study_dir <- file.path(tempdir(), "carwatch-r-interactive-example")
+```
+
+## Generate and import a study
+
+```{r generate-import}
+generate_synthetic_study_data(
+  study_dir,
+  n_participants = 3,
+  non_compliant_sample_ratio = 0.10,
+  missing_awakening_time_ratio = 0.05,
+  missing_sampling_time_ratio = 0.10,
+  random_state = 42,
+  overwrite = TRUE,
+  validate = FALSE
+)
+
+folders <- list.dirs(file.path(study_dir, "logs"), recursive = FALSE, full.names = TRUE)
+participant_dirs <- stats::setNames(folders, basename(folders))
+raw_logs <- read_raw_logs_from_participant_dirs(participant_dirs)
+manual_diary <- read_manual_diary(file.path(study_dir, "manual_diary.csv"))
+```
+
+## Prepare the conversion-report editor
+
+The first pass is advisory. Constructing an editor never modifies `raw_logs`.
+The app validates decisions with the same rules as `convert_raw_logs()`.
+
+```{r report-editor}
+advisory <- suppressWarnings(convert_raw_logs(
+  raw_logs,
+  errors = "warn",
+  create_report = TRUE
+))
+
+report_app <- conversion_report_editor(advisory$report, launch = FALSE)
+class(report_app)
+```
+
+In an interactive R session, launch the editor and retain the returned decision
+table:
+
+```{r launch-editor, eval=FALSE}
+decisions <- conversion_report_editor(advisory$report)
+write_conversion_report(decisions, file.path(study_dir, "conversion_issues.csv"))
+
+final_results <- convert_raw_logs(
+  raw_logs,
+  errors = "raise",
+  issue_decisions = decisions,
+  manual_diary = manual_diary
+)
+```
+
+## Prepare the interactive timeline
+
+The generated submitted decisions can be used to create final results during a
+noninteractive render. `launch = FALSE` returns the Shiny app object.
+
+```{r timeline-app}
+submitted <- read_conversion_report(file.path(study_dir, "issue_decisions.csv"))
+study_results <- convert_raw_logs(
+  raw_logs,
+  errors = "raise",
+  issue_decisions = submitted,
+  manual_diary = manual_diary
+)
+
+timeline_app <- interactive_sampling_timeline(study_results, launch = FALSE)
+class(timeline_app)
+```
+
+```{r launch-timeline, eval=FALSE}
+interactive_sampling_timeline(study_results)
+```

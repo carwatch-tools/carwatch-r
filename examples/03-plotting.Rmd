@@ -1,0 +1,86 @@
+---
+title: "CARWatch plotting"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+This walkthrough reproduces the Python plotting notebook with R-native
+`ggplot2` objects. It builds complete Study Results, merges deterministic
+cortisol measurements, and creates the four CARWatch quality-control plots.
+
+```{r setup}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(carwatch)
+
+study_dir <- file.path(tempdir(), "carwatch-r-plotting-example")
+```
+
+## Prepare complete Study Results
+
+```{r prepare}
+generate_synthetic_study_data(
+  study_dir,
+  n_participants = 4,
+  non_compliant_sample_ratio = 0.15,
+  missing_awakening_time_ratio = 0,
+  missing_sampling_time_ratio = 0.05,
+  random_state = 42,
+  create_cortisol_data = TRUE,
+  overwrite = TRUE
+)
+
+folders <- list.dirs(file.path(study_dir, "logs"), recursive = FALSE, full.names = TRUE)
+participant_dirs <- stats::setNames(folders, basename(folders))
+raw_logs <- read_raw_logs_from_participant_dirs(participant_dirs)
+decisions <- read_conversion_report(file.path(study_dir, "issue_decisions.csv"))
+manual_diary <- read_manual_diary(file.path(study_dir, "manual_diary.csv"))
+
+study_results <- convert_raw_logs(
+  raw_logs,
+  errors = "raise",
+  issue_decisions = decisions,
+  manual_diary = manual_diary
+)
+
+cortisol <- readr::read_csv(
+  file.path(study_dir, "cortisol.csv"),
+  show_col_types = FALSE
+)
+merged_results <- merge_saliva(study_results, cortisol, match_on = "position")
+```
+
+## Participant-day sampling timeline
+
+Expected registered times are open markers. Recorded times are coloured by
+compliance and shaped by their source.
+
+```{r timeline, fig.width=9, fig.height=5}
+plot_sampling_timeline(study_results, participant = names(participant_dirs)[[1]], day = "D1")
+```
+
+## Cohort compliance
+
+```{r compliance-proportion, fig.width=8, fig.height=5}
+plot_compliance_overview(study_results, view = "proportion")
+```
+
+```{r compliance-heatmap, fig.width=8, fig.height=5}
+plot_compliance_overview(study_results, view = "heatmap")
+```
+
+## Timing deviations
+
+```{r timing-deviation, fig.width=8, fig.height=5}
+plot_timing_deviation(study_results)
+```
+
+## Cortisol response
+
+The saliva curve uses observed minutes since awakening and preserves the
+participant-day curves behind the cohort mean.
+
+```{r saliva-curve, fig.width=8, fig.height=5}
+plot_saliva_curve(merged_results, value = "cortisol")
+```

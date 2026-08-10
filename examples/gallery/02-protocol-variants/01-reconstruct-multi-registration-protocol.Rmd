@@ -1,0 +1,81 @@
+---
+title: "Reconstruct a multi-registration protocol"
+output: html_document
+---
+
+One registration can contribute several canonical study days. An explicit
+ordered manifest fixes the cohort protocol order and retains the canonical
+position of a registration that is absent for one participant.
+
+```{r setup}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(carwatch)
+
+control_ids <- c("control-1", "control-2", "control-3", "control-4")
+challenge_ids <- c("challenge-1", "challenge-2", "challenge-3", "challenge-4")
+
+study_config <- list(
+  saliva_distances = c(0, 30, 15, 15),
+  registrations = list(
+    list(
+      study_name = "Control",
+      study_days = 2,
+      registration_date = "2026-03-01",
+      saliva_ids = control_ids,
+      condition = "control"
+    ),
+    list(
+      study_name = "Challenge",
+      study_days = 2,
+      registration_date = "2026-03-08",
+      saliva_ids = challenge_ids,
+      condition = "challenge"
+    )
+  )
+)
+
+study_dir <- file.path(tempdir(), "carwatch-gallery-multi-registration")
+generate_synthetic_study_data(
+  study_dir,
+  study_config = study_config,
+  n_participants = 3,
+  non_compliant_sample_ratio = 0.10,
+  missing_awakening_time_ratio = 0,
+  missing_sampling_time_ratio = 0,
+  random_state = 42,
+  overwrite = TRUE,
+  validate = FALSE
+)
+```
+
+```{r manifest}
+folders <- list.dirs(file.path(study_dir, "logs"), recursive = FALSE, full.names = TRUE)
+participant_dirs <- stats::setNames(folders, basename(folders))
+raw_logs <- read_raw_logs_from_participant_dirs(participant_dirs)
+
+protocol_manifest <- list(
+  list(
+    study_name = "Control",
+    study_days = 2,
+    saliva_ids = control_ids,
+    saliva_times = c(0, 30, 15, 15),
+    saliva_absolute_times = character()
+  ),
+  list(
+    study_name = "Challenge",
+    study_days = 2,
+    saliva_ids = challenge_ids,
+    saliva_times = c(0, 30, 15, 15),
+    saliva_absolute_times = character()
+  )
+)
+
+study_results <- convert_raw_logs(
+  raw_logs,
+  protocol_manifest = protocol_manifest,
+  errors = "raise"
+)
+
+summarize_protocol(raw_logs, protocol_manifest = protocol_manifest)
+as_study_days(study_results)
+```

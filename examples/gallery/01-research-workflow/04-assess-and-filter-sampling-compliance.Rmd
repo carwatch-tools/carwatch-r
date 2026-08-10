@@ -1,0 +1,50 @@
+---
+title: "Assess and filter sampling compliance"
+output: html_document
+---
+
+Compliance is calculated during conversion from registered targets and observed
+sampling times. Filtering creates a separate analysis-ready object without
+changing the complete evidence-bearing results.
+
+```{r setup}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(carwatch)
+
+study_dir <- file.path(tempdir(), "carwatch-gallery-compliance")
+generate_synthetic_study_data(
+  study_dir,
+  n_participants = 4,
+  non_compliant_sample_ratio = 0.20,
+  missing_awakening_time_ratio = 0,
+  missing_sampling_time_ratio = 0,
+  random_state = 42,
+  overwrite = TRUE
+)
+
+folders <- list.dirs(file.path(study_dir, "logs"), recursive = FALSE, full.names = TRUE)
+participant_dirs <- stats::setNames(folders, basename(folders))
+raw_logs <- read_raw_logs_from_participant_dirs(participant_dirs)
+study_results <- convert_raw_logs(raw_logs, errors = "raise")
+```
+
+```{r assess}
+summarize_compliance(study_results)
+find_non_compliant_samples(study_results)
+find_sampling_anomalies(study_results)
+```
+
+By default, one failed sample clears its entire canonical day in the analysis
+copy. Registration, scheduling, and source provenance remain present.
+
+```{r filter}
+analysis_results <- drop_non_compliant_samples(study_results)
+
+nrow(as_sample_events(study_results))
+nrow(as_sample_events(analysis_results))
+summarize_compliance(analysis_results)
+```
+
+```{r plot, fig.width=8, fig.height=5}
+plot_compliance_overview(study_results, view = "heatmap")
+```

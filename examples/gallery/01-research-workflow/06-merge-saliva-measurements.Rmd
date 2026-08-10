@@ -1,0 +1,52 @@
+---
+title: "Merge positional saliva measurements"
+output: html_document
+---
+
+Laboratory data often identify canonical day and sample position rather than a
+physical tube. Positional matching resolves those keys through the
+registration-aware Study Results.
+
+```{r setup}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(carwatch)
+
+study_dir <- file.path(tempdir(), "carwatch-gallery-merge-saliva")
+generate_synthetic_study_data(
+  study_dir,
+  n_participants = 3,
+  missing_awakening_time_ratio = 0,
+  missing_sampling_time_ratio = 0,
+  random_state = 42,
+  create_cortisol_data = TRUE,
+  overwrite = TRUE
+)
+
+folders <- list.dirs(file.path(study_dir, "logs"), recursive = FALSE, full.names = TRUE)
+participant_dirs <- stats::setNames(folders, basename(folders))
+study_results <- convert_raw_logs(
+  read_raw_logs_from_participant_dirs(participant_dirs),
+  errors = "raise"
+)
+```
+
+```{r merge}
+cortisol <- readr::read_csv(
+  file.path(study_dir, "cortisol.csv"),
+  show_col_types = FALSE
+)
+
+merged_results <- merge_saliva(
+  study_results,
+  cortisol,
+  match_on = "position"
+)
+
+head(as_sample_events(merged_results)[, c(
+  "participant", "day", "sample", "sample_position", "condition", "cortisol"
+)])
+```
+
+For a BioPsyKit-style laboratory file keyed by physical tube ID, use
+`read_saliva()` and `match_on = "sample"`. CARWatch never infers position from
+the spelling of an identifier.

@@ -1,0 +1,61 @@
+---
+title: "Inspect individual sampling timing"
+output: html_document
+---
+
+Inspect a participant-day against its registered and app-updated targets. Plot
+colour represents compliance; marker shape represents whether an observed time
+came from the app, manual diary, or schedule fallback.
+
+```{r setup}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(carwatch)
+
+study_dir <- file.path(tempdir(), "carwatch-gallery-individual-timing")
+generate_synthetic_study_data(
+  study_dir,
+  n_participants = 4,
+  non_compliant_sample_ratio = 0.20,
+  missing_awakening_time_ratio = 0,
+  missing_sampling_time_ratio = 0,
+  random_state = 42,
+  overwrite = TRUE
+)
+
+folders <- list.dirs(file.path(study_dir, "logs"), recursive = FALSE, full.names = TRUE)
+participant_dirs <- stats::setNames(folders, basename(folders))
+study_results <- convert_raw_logs(
+  read_raw_logs_from_participant_dirs(participant_dirs),
+  errors = "raise"
+)
+```
+
+```{r select-day}
+samples <- as_sample_events(study_results)
+focus <- samples[samples$sample_compliant %in% FALSE, , drop = FALSE]
+if (!nrow(focus)) focus <- samples
+focus <- focus[1, c("participant", "day"), drop = FALSE]
+
+day_samples <- samples[
+  samples$participant == focus$participant[[1]] & samples$day == focus$day[[1]],
+  ,
+  drop = FALSE
+]
+day_samples[, c(
+  "sample", "sample_position", "scheduled_sampling_time",
+  "sampling_time", "time_deviation_min", "sample_compliant",
+  "sampling_time_source"
+)]
+```
+
+```{r timeline, fig.width=9, fig.height=5}
+plot_sampling_timeline(
+  study_results,
+  participant = focus$participant[[1]],
+  day = focus$day[[1]]
+)
+```
+
+```{r interactive, eval=FALSE}
+interactive_sampling_timeline(study_results)
+```

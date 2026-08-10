@@ -1,0 +1,43 @@
+---
+title: "Load participant folders and inspect source provenance"
+output: html_document
+---
+
+Load one explicitly named folder per participant. CARWatch selects compatible
+CSV and ZIP sources, de-duplicates identical raw events, and retains an audit of
+selected and excluded inputs.
+
+```{r setup}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(carwatch)
+
+study_dir <- file.path(tempdir(), "carwatch-gallery-load-logs")
+generate_synthetic_study_data(
+  study_dir,
+  n_participants = 3,
+  missing_awakening_time_ratio = 0,
+  missing_sampling_time_ratio = 0,
+  random_state = 42,
+  overwrite = TRUE
+)
+```
+
+```{r import}
+folders <- list.dirs(file.path(study_dir, "logs"), recursive = FALSE, full.names = TRUE)
+participant_dirs <- stats::setNames(folders, basename(folders))
+
+imported <- read_raw_logs_from_participant_dirs(
+  participant_dirs,
+  create_report = TRUE
+)
+
+raw_logs <- imported$raw_logs
+source_audit <- imported$source_audit
+
+head(raw_logs)
+source_audit
+summarize_source_audit(source_audit)
+```
+
+Participant identifiers come from `participant_dirs`. Filenames and sample IDs
+remain opaque provenance values.

@@ -1,7 +1,10 @@
 # R Markdown workflows
 
-The package includes two executable walkthroughs matching the Python example
-notebooks with R-native functions:
+The package contains four end-to-end walkthroughs and nine focused gallery
+workflows. Together they mirror the executable Python example catalogue using
+R-native tibbles, `ggplot2`, Shiny, and DT.
+
+## End-to-end walkthroughs
 
 - [`examples/01-log-processing.Rmd`](../examples/01-log-processing.Rmd): raw
   log import, source audit, advisory conversion, submitted decisions, manual
@@ -9,14 +12,34 @@ notebooks with R-native functions:
 - [`examples/02-saliva-analysis.Rmd`](../examples/02-saliva-analysis.Rmd):
   completed conversion, position-based cortisol merge, compliance filtering,
   response features, and static plots.
+- [`examples/03-plotting.Rmd`](../examples/03-plotting.Rmd): individual timing,
+  cohort compliance, deviations, and cortisol-response plots.
+- [`examples/04-synthetic-study-interactive-log-processing.Rmd`](../examples/04-synthetic-study-interactive-log-processing.Rmd):
+  synthetic input generation and nonblocking construction of the Shiny/DT
+  conversion editor and interactive timeline.
+
+## Focused gallery
+
+The [gallery index](../examples/gallery/README.md) links all focused examples:
+
+1. Load participant folders and inspect source provenance.
+2. Resolve conversion issues through a CSV report.
+3. Resolve conversion issues interactively.
+4. Assess and filter sampling compliance.
+5. Inspect individual sampling timing.
+6. Merge positional saliva measurements.
+7. Compute cortisol response features.
+8. Reconstruct a multi-registration protocol with an ordered manifest.
+9. Generate deterministic local example data.
 
 ## Install prerequisites
 
 Install R 4.3 or newer. On macOS, `brew install r` installs R. Install this
-package and the renderer:
+package, the renderer, and the optional dependencies used by the interactive
+examples:
 
 ```r
-install.packages(c("remotes", "rmarkdown"))
+install.packages(c("remotes", "rmarkdown", "shiny", "DT"))
 remotes::install_github("carwatch-tools/carwatch-r")
 ```
 
@@ -33,12 +56,21 @@ distribution.
 
 ## Render an example
 
-From the package root:
+Render one document from the package root:
 
 ```r
 rmarkdown::render("examples/01-log-processing.Rmd")
-rmarkdown::render("examples/02-saliva-analysis.Rmd")
 ```
+
+Render and validate all 13 documents:
+
+```sh
+Rscript tools/render_examples.R
+```
+
+Interactive documents use `launch = FALSE` while rendering. This constructs
+and validates each `shiny.appobj` without starting a blocking server. Run the
+explicit launch chunks in an interactive R session to open the applications.
 
 Each document creates its data below `tempdir()` and prints that path. The
 source logs, advisory report, submitted report, manual diary, Study Results,

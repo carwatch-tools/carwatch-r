@@ -1,0 +1,39 @@
+---
+title: "Generate local CARWatch example data"
+output: html_document
+---
+
+Create deterministic raw logs, a manual diary, an editable issue report, and
+position-indexed cortisol measurements. The generator writes ordinary input
+artifacts and validates the same two-pass workflow used for real studies.
+
+```{r setup}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(carwatch)
+
+study_dir <- file.path(tempdir(), "carwatch-gallery-example-data")
+```
+
+```{r generate}
+generate_synthetic_study_data(
+  study_dir,
+  n_participants = 4,
+  non_compliant_sample_ratio = 0.10,
+  missing_awakening_time_ratio = 0.05,
+  missing_sampling_time_ratio = 0.10,
+  random_state = 42,
+  create_cortisol_data = TRUE,
+  overwrite = TRUE
+)
+
+list.files(study_dir, recursive = TRUE)
+```
+
+```{r inspect}
+read_manual_diary(file.path(study_dir, "manual_diary.csv"))
+read_conversion_report(file.path(study_dir, "issue_decisions.csv"))
+readr::read_csv(file.path(study_dir, "cortisol.csv"), show_col_types = FALSE)
+```
+
+Set `study_dir` to a controlled project path to retain the generated files.
+`overwrite = TRUE` is required before an existing non-empty target is replaced.

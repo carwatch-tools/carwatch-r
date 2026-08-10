@@ -1,0 +1,51 @@
+---
+title: "Compute cortisol response features"
+output: html_document
+---
+
+Calculate response features from actual CARWatch collection times. Samples are
+ordered by registered position, not by physical tube text.
+
+```{r setup}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(carwatch)
+
+study_dir <- file.path(tempdir(), "carwatch-gallery-cortisol-features")
+generate_synthetic_study_data(
+  study_dir,
+  n_participants = 4,
+  non_compliant_sample_ratio = 0,
+  missing_awakening_time_ratio = 0,
+  missing_sampling_time_ratio = 0,
+  random_state = 42,
+  create_cortisol_data = TRUE,
+  overwrite = TRUE
+)
+
+folders <- list.dirs(file.path(study_dir, "logs"), recursive = FALSE, full.names = TRUE)
+participant_dirs <- stats::setNames(folders, basename(folders))
+study_results <- convert_raw_logs(
+  read_raw_logs_from_participant_dirs(participant_dirs),
+  errors = "raise"
+)
+cortisol <- readr::read_csv(file.path(study_dir, "cortisol.csv"), show_col_types = FALSE)
+merged_results <- merge_saliva(study_results, cortisol, match_on = "position")
+```
+
+```{r features}
+features <- compute_features_from_carwatch(
+  merged_results,
+  saliva_type = "cortisol"
+)
+
+features
+```
+
+```{r inspect-times}
+head(as_sample_events(merged_results)[, c(
+  "participant", "day", "sample_position", "sampling_time", "time_min", "cortisol"
+)])
+```
+
+AUC and slope values require complete, strictly increasing observed sampling
+times within each participant-day curve.

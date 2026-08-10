@@ -1,0 +1,59 @@
+---
+title: "Resolve conversion issues interactively"
+output: html_document
+---
+
+The Shiny/DT editor is the R-native alternative to spreadsheet review. It
+restricts decisions by issue code and returns the validated issue table when
+`Done` is pressed.
+
+```{r setup}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(carwatch)
+
+if (!requireNamespace("shiny", quietly = TRUE) ||
+    !requireNamespace("DT", quietly = TRUE)) {
+  stop("Install the optional packages with install.packages(c('shiny', 'DT')).")
+}
+
+study_dir <- file.path(tempdir(), "carwatch-gallery-interactive-decisions")
+generate_synthetic_study_data(
+  study_dir,
+  n_participants = 3,
+  missing_awakening_time_ratio = 0.05,
+  missing_sampling_time_ratio = 0.10,
+  random_state = 42,
+  overwrite = TRUE,
+  validate = FALSE
+)
+
+folders <- list.dirs(file.path(study_dir, "logs"), recursive = FALSE, full.names = TRUE)
+participant_dirs <- stats::setNames(folders, basename(folders))
+raw_logs <- read_raw_logs_from_participant_dirs(participant_dirs)
+```
+
+```{r prepare-app}
+advisory <- suppressWarnings(convert_raw_logs(
+  raw_logs,
+  errors = "warn",
+  create_report = TRUE
+))
+
+app <- conversion_report_editor(advisory$report, launch = FALSE)
+class(app)
+```
+
+Run the following in an interactive R session. Decisions are applied only by
+the subsequent strict conversion.
+
+```{r launch-app, eval=FALSE}
+decisions <- conversion_report_editor(advisory$report)
+manual_diary <- read_manual_diary(file.path(study_dir, "manual_diary.csv"))
+
+study_results <- convert_raw_logs(
+  raw_logs,
+  errors = "raise",
+  issue_decisions = decisions,
+  manual_diary = manual_diary
+)
+```
