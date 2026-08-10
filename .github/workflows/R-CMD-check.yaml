@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 jobs:
   R-CMD-check:
@@ -23,6 +22,44 @@ jobs:
         with:
           extra-packages: any::rcmdcheck, any::covr, any::shinytest2
       - uses: r-lib/actions/check-r-package@v2
+        with:
+          args: 'c("--no-manual", "--as-cran")'
+
+  python-parity-oracle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out R port
+        uses: actions/checkout@v4
+      - name: Check out pinned Python oracle
+        uses: actions/checkout@v4
+        with:
+          repository: carwatch-tools/carwatch-python
+          ref: v1.0.0
+          path: python-oracle
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: python-oracle/pyproject.toml
+      - name: Install Python oracle
+        run: python -m pip install ./python-oracle
+      - name: Verify mapped Python test inventory
+        run: python tools/check_python_test_inventory.py python-oracle/tests
+      - name: Regenerate versioned parity fixtures
+        run: python tools/generate_python_fixtures.py
+      - name: Reject fixture drift
+        run: git diff --exit-code -- inst/extdata/parity/v1.0.0
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::covr
+      - name: Run coverage suite
+        run: Rscript -e 'covr::package_coverage(quiet = FALSE)'
 
   documentation:
     runs-on: ubuntu-latest

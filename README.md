@@ -9,9 +9,11 @@ sampling-quality information with laboratory biomarkers. Raw log events remain
 immutable evidence, registrations define protocol structure, corrections are
 second-pass decisions, and output retains timing and source provenance.
 
-This is a native R port of Python carwatch 1.0.0. It is usable for the workflow
-below but is not yet behavior-complete. See [PORT_STATUS.md](PORT_STATUS.md)
-for the explicit parity boundary.
+This is the native R port of `carwatch-python` 1.0.0. It preserves the Python
+package's semantic results, validation behavior, provenance, conversion-report
+workflow, and three-header CSV interchange while exposing R-native tibbles,
+S3 results, ggplot2 figures, and Shiny/DT tools. See
+[PORT_STATUS.md](PORT_STATUS.md) for the exact parity boundary.
 
 Executable R Markdown walkthroughs are in [examples/](examples/). Start with
 [the R Markdown workflow guide](docs/rmarkdown-workflows.md) for rendering,
@@ -39,6 +41,13 @@ The initial release is GitHub-only. After the repository is published:
 ~~~r
 install.packages("remotes")
 remotes::install_github("carwatch-tools/carwatch-r")
+~~~
+
+Install the optional interactive dependencies for the Shiny timeline and
+conversion-report editor:
+
+~~~r
+install.packages(c("shiny", "DT"))
 ~~~
 
 To install this checkout locally:
@@ -99,7 +108,7 @@ initial <- convert_raw_logs(
   create_report = TRUE
 )
 initial$report$summary
-write.csv(initial$report$issues, "conversion_issues.csv", row.names = FALSE)
+write_conversion_report(initial$report, "conversion_issues.csv")
 ~~~
 
 The prefilled accept values are recommendations. They do not modify raw events
@@ -218,7 +227,9 @@ merged_results <- merge_saliva(
 )
 ~~~
 
-Pass laboratory metadata explicitly through `metadata_cols`. A value that is
+Non-numeric non-key columns are inferred as laboratory metadata. Use
+`metadata_cols` to classify metadata explicitly when its R storage type is
+numeric or otherwise ambiguous. A value that is
 constant for a participant-day is retained as a day-level canonical variable;
 a value that varies by tube stays sample-level. This is the R replacement for
 Python pandas index-level metadata.
@@ -253,8 +264,27 @@ plot_saliva_curve(merged_results, value = "cortisol")
 ~~~
 
 For generic long-format saliva data, use compute_features, auc, max_value,
-initial_value, max_increase, or slope. Interactive Shiny/DT tools are planned
-and intentionally excluded from this noninteractive port.
+initial_value, max_increase, or slope.
+
+### Interactive review
+
+Launch a participant/day selector around the same static timeline used in
+reports:
+
+~~~r
+interactive_sampling_timeline(study_results)
+~~~
+
+Edit a first-pass conversion report with issue-specific decision choices. The
+gadget returns a validated issue tibble when `Done` is pressed.
+
+~~~r
+decisions <- conversion_report_editor(initial$report)
+write_conversion_report(decisions, "conversion_issues.csv")
+~~~
+
+Set `launch = FALSE` on either function to obtain a `shiny.appobj` for
+deployment, embedding, or automated smoke tests.
 
 ## Synthetic data
 
@@ -301,10 +331,13 @@ the adjacent Python checkout:
 
 ~~~sh
 uv run python ../carwatch-r/tools/generate_python_fixtures.py
+python ../carwatch-r/tools/check_python_test_inventory.py tests
 ~~~
 
-Do not claim full Python parity until [PORT_STATUS.md](PORT_STATUS.md) is
-complete.
+The inventory gate maps all 216 named Python 1.0.0 test functions to the R
+contract suites. CI checks the port on R 4.3 and current R across Linux, macOS,
+and Windows, regenerates the Python-oracle fixtures, runs coverage, and builds
+the pkgdown site.
 
 ## License
 
