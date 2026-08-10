@@ -1,2 +1,2 @@
 participant,participant_folder,source,archive_member,logical_source_file,raw_event_count,status,reason
-VP01,/Users/richer/Documents/PhD/Code_Repositories/HealthPsychology/CARWatch/carwatch-r/inst/extdata/parity/v1.0.0/raw/VP01,/Users/richer/Documents/PhD/Code_Repositories/HealthPsychology/CARWatch/carwatch-r/inst/extdata/parity/v1.0.0/raw/VP01/carwatch_parity_VP01_20250515.csv,,carwatch_parity_VP01_20250515.csv,4,selected,selected_extracted_csv
+VP01,raw/VP01,raw/VP01/carwatch_parity_VP01_20250515.csv,,carwatch_parity_VP01_20250515.csv,4,selected,selected_extracted_csv

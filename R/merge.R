@@ -10,8 +10,10 @@
 #' @param match_on "sample"/"physical_id" or "position".
 #' @param missing_carwatch_data Whether unmatched laboratory rows are ignored or rejected.
 #' @param metadata_cols Optional laboratory columns to retain as metadata rather
-#'   than numeric measurements. Constant participant-day values are stored at
-#'   the canonical day level; values varying within a day stay sample-level.
+#'   than numeric measurements. When omitted, non-numeric non-key columns are
+#'   treated as metadata. This is the R equivalent of additional pandas index
+#'   levels. Constant participant-day values are stored at the canonical day
+#'   level; values varying within any day stay sample-level everywhere.
 #' @return Complete canonical results with laboratory and merge-provenance fields.
 #' @export
 merge_saliva <- function(study_results, saliva, correct_swaps = TRUE, match_on = c("sample", "position", "physical_id"), missing_carwatch_data = c("ignore", "raise"), metadata_cols = NULL) {
@@ -24,7 +26,10 @@ merge_saliva <- function(study_results, saliva, correct_swaps = TRUE, match_on =
   samples <- as_sample_events(study_results)
   known <- c("participant", "sample", "day", "sample_position")
   available <- setdiff(names(saliva), known)
-  if (is.null(metadata_cols)) metadata_cols <- character()
+  if (is.null(metadata_cols)) {
+    numeric_available <- vapply(saliva[available], function(value) is.numeric(value) || inherits(value, "integer64"), logical(1))
+    metadata_cols <- if (any(numeric_available)) available[!numeric_available] else character()
+  }
   if (!is.character(metadata_cols) || any(!nzchar(metadata_cols)) || length(setdiff(metadata_cols, available))) .carwatch_abort("`metadata_cols` must name non-key columns in the saliva data.", "carwatch_value_error")
   metadata_cols <- unique(metadata_cols)
   measurements <- setdiff(available, metadata_cols)
@@ -41,37 +46,39 @@ merge_saliva <- function(study_results, saliva, correct_swaps = TRUE, match_on =
     .require_columns(saliva, "sample", "Saliva data")
     saliva$sample <- .as_character_id(saliva$sample, "Saliva sample IDs")
     if (anyDuplicated(saliva[c("participant", "sample")])) .carwatch_abort("Saliva data contain duplicate participant/sample matches.", "carwatch_schema_error")
-    recorded_known <- !is.na(samples$recorded_sample) & nzchar(samples$recorded_sample) & samples$recorded_sample %in% samples$sample
-    unknown_recorded <- !is.na(samples$recorded_sample) & nzchar(samples$recorded_sample) & !recorded_known
-    if (any(unknown_recorded)) warning("Recorded sample IDs absent from their registration were matched using the scheduled sample.", call. = FALSE)
-    samples$.match <- if (correct_swaps) ifelse(recorded_known, samples$recorded_sample, samples$sample) else samples$sample
-    observed <- !is.na(samples$sampling_time)
-    duplicate_physical <- duplicated(samples$.match) & observed
+    recorded_present <- !is.na(samples$recorded_sample) & nzchar(trimws(samples$recorded_sample))
+    samples$.match <- if (correct_swaps) ifelse(recorded_present, trimws(samples$recorded_sample), samples$sample) else samples$sample
+    duplicate_physical <- duplicated(samples[c("participant", ".match")]) | duplicated(samples[c("participant", ".match")], fromLast = TRUE)
     if (any(duplicate_physical)) .carwatch_abort("Multiple recorded sampling events refer to the same physical saliva tube.", "carwatch_merge_error")
     matched <- dplyr::left_join(samples, saliva, by = c("participant", ".match" = "sample"))
     unmatched <- dplyr::anti_join(saliva, dplyr::transmute(samples, participant = .data$participant, sample = .data$.match), by = c("participant", "sample"))
-    recorded_in_schedule <- recorded_known
-    mismatch_corrected <- !is.na(samples$recorded_sample) & samples$recorded_sample != samples$sample & !is.na(matched[[measurements[[1]]]])
+    recorded_in_schedule <- NULL
+    mismatch_corrected <- correct_swaps & recorded_present & samples$recorded_sample != samples$sample & !is.na(matched[[measurements[[1]]]])
   } else {
     .require_columns(saliva, c("day", "sample_position"), "Saliva data")
     saliva$day <- .as_character_id(saliva$day, "Saliva day IDs")
     saliva$sample_position <- suppressWarnings(as.integer(saliva$sample_position))
     if (anyNA(saliva$sample_position) | any(saliva$sample_position < 1L)) .carwatch_abort("Saliva sample_position values must be positive integers.", "carwatch_schema_error")
     if (anyDuplicated(saliva[c("participant", "day", "sample_position")])) .carwatch_abort("Saliva data contain duplicate participant/day/sample_position matches.", "carwatch_schema_error")
-    scheduled_position <- stats::setNames(samples$sample_position, samples$sample)
-    recorded_known <- !is.na(samples$recorded_sample) & nzchar(samples$recorded_sample) & samples$recorded_sample %in% names(scheduled_position)
+    schedule_key <- paste(samples$participant, samples$day, samples$sample, sep = "\r")
+    recorded_key <- paste(samples$participant, samples$day, samples$recorded_sample, sep = "\r")
+    recorded_present <- !is.na(samples$recorded_sample) & nzchar(trimws(samples$recorded_sample))
+    recorded_position <- samples$sample_position[match(recorded_key, schedule_key)]
+    recorded_known <- recorded_present & !is.na(recorded_position)
     unknown_recorded <- !is.na(samples$recorded_sample) & nzchar(samples$recorded_sample) & !recorded_known
     if (any(unknown_recorded)) warning("Recorded sample IDs absent from their registration were matched using the scheduled sample.", call. = FALSE)
-    samples$.match_position <- if (correct_swaps) ifelse(recorded_known, unname(scheduled_position[samples$recorded_sample]), samples$sample_position) else samples$sample_position
+    samples$.match_position <- if (correct_swaps) ifelse(recorded_known, recorded_position, samples$sample_position) else samples$sample_position
+    duplicate_positions <- duplicated(samples[c("participant", "day", ".match_position")]) | duplicated(samples[c("participant", "day", ".match_position")], fromLast = TRUE)
+    if (any(duplicate_positions)) .carwatch_abort("Multiple recorded sampling events refer to the same physical saliva tube.", "carwatch_merge_error")
     matched <- dplyr::left_join(samples, saliva, by = c("participant", "day", ".match_position" = "sample_position"))
     unmatched <- dplyr::anti_join(saliva, dplyr::transmute(samples, participant = .data$participant, day = .data$day, sample_position = .data$.match_position), by = c("participant", "day", "sample_position"))
     recorded_in_schedule <- recorded_known
     mismatch_corrected <- correct_swaps & recorded_known & samples$recorded_sample != samples$sample & !is.na(matched[[measurements[[1]]]])
   }
-  if (nrow(unmatched) && missing_carwatch_data == "raise") .carwatch_abort("Laboratory measurements do not match a CARWatch sampling event.", "carwatch_schema_error")
+  if (nrow(unmatched)) .carwatch_abort("Laboratory data cannot be represented because no CARWatch protocol position exists for one or more rows.", "carwatch_merge_error")
   matched$lab_value_available <- apply(!is.na(as.data.frame(matched[measurements])), 1L, all)
   matched$mismatch_corrected <- mismatch_corrected
-  matched$recorded_sample_in_schedule <- recorded_in_schedule
+  if (!is.null(recorded_in_schedule)) matched$recorded_sample_in_schedule <- recorded_in_schedule
   matched$sampling_event_recorded <- !is.na(matched$sampling_time)
   missing_event <- !matched$sampling_event_recorded & matched$lab_value_available
   if (any(missing_event) && missing_carwatch_data == "raise") {
@@ -79,13 +86,16 @@ merge_saliva <- function(study_results, saliva, correct_swaps = TRUE, match_on =
     .carwatch_abort(sprintf("Laboratory measurements require a recorded CARWatch sampling event: participant=%s, day=%s, scheduled_sample=%s.", first$participant[[1]], first$day[[1]], first$sample[[1]]), "carwatch_merge_error")
   }
   additions <- list()
-  for (current_variable in c(measurements, "lab_value_available", "mismatch_corrected", "recorded_sample_in_schedule", "sampling_event_recorded")) additions[[length(additions) + 1L]] <- tibble::tibble(participant = matched$participant, day = matched$day, sample = matched$sample, variable = current_variable, value = as.list(matched[[current_variable]]))
+  provenance <- c("lab_value_available", "mismatch_corrected")
+  if (!is.null(recorded_in_schedule)) provenance <- c(provenance, "recorded_sample_in_schedule")
+  for (current_variable in c(measurements, provenance)) additions[[length(additions) + 1L]] <- tibble::tibble(participant = matched$participant, day = matched$day, sample = matched$sample, variable = current_variable, value = as.list(matched[[current_variable]]))
   for (metadata in metadata_cols) {
     groups <- split(seq_len(nrow(matched)), interaction(matched$participant, matched$day, drop = TRUE, lex.order = TRUE))
+    day_level <- all(vapply(groups, function(indices) length(unique(matched[[metadata]][indices][!is.na(matched[[metadata]][indices])])) <= 1L, logical(1))) && any(!is.na(matched[[metadata]]))
     for (indices in groups) {
       values <- matched[[metadata]][indices]
       observed <- unique(values[!is.na(values)])
-      if (length(observed) <= 1L) {
+      if (day_level) {
         additions[[length(additions) + 1L]] <- tibble::tibble(participant = matched$participant[[indices[[1]]]], day = matched$day[[indices[[1]]]], sample = "day", variable = metadata, value = list(if (length(observed)) observed[[1]] else NA))
       } else {
         additions[[length(additions) + 1L]] <- tibble::tibble(participant = matched$participant[indices], day = matched$day[indices], sample = matched$sample[indices], variable = metadata, value = as.list(values))
@@ -93,5 +103,6 @@ merge_saliva <- function(study_results, saliva, correct_swaps = TRUE, match_on =
     }
   }
   existing <- .results_long(study_results)
+  existing <- dplyr::filter(existing, !.data$variable %in% provenance)
   .from_long_results(dplyr::bind_rows(existing, dplyr::bind_rows(additions)), study_results$participant)
 }

@@ -7,7 +7,7 @@
 generate_synthetic_study_data(
   output_dir,
   study_config = NULL,
-  n_participants = 4L,
+  n_participants = NULL,
   non_compliant_sample_ratio = 0.1,
   missing_awakening_time_ratio = 0.01,
   missing_sampling_time_ratio = 0.02,
@@ -20,10 +20,11 @@ generate_synthetic_study_data(
 \arguments{
 \item{output_dir}{Target directory.}
 
-\item{study_config}{List containing \code{study_name}, \code{study_days}, \code{saliva_ids},
-\code{saliva_times}, and optional \code{saliva_absolute_times}.}
+\item{study_config}{Study Manager-style list, decoded \code{CARWATCH;} QR payload,
+or \code{NULL} for the four-day CAR default.}
 
-\item{n_participants}{Number of generated participants.}
+\item{n_participants}{Number of generated participants. When \code{NULL}, use the
+configured value or the Study Manager default of 80.}
 
 \item{non_compliant_sample_ratio}{Proportion of observed samples with timing
 deliberately outside the default compliance tolerance.}
@@ -31,10 +32,9 @@ deliberately outside the default compliance tolerance.}
 \item{missing_awakening_time_ratio}{Proportion of participant-days with a
 missing awakening event and first sample.}
 
-\item{missing_sampling_time_ratio}{Proportion of expected samples omitted
-from raw logs, including omissions caused by missing awakenings.}
+\item{missing_sampling_time_ratio}{Total proportion of expected scans omitted.}
 
-\item{random_state}{Integer seed, or \code{NULL} for an unseeded generation.}
+\item{random_state}{Integer seed, or \code{NULL} for unseeded generation.}
 
 \item{create_cortisol_data}{Whether to create position-indexed \code{cortisol.csv}.}
 
@@ -48,5 +48,6 @@ The normalized output directory path.
 \description{
 Generated anomalies are represented by ordinary raw-log omissions and a
 matching manual diary/decision report. The source events themselves are
-never patched.
+never patched. Study Manager snake-case, camelCase, and QR aliases are
+accepted, including multiple registration blocks and opaque saliva IDs.
 }

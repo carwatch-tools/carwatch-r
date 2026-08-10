@@ -1,0 +1,4 @@
+1747278000000;local;study_metadata;{"study_name":"study","saliva_ids":["s1","s2"],"saliva_times":[0,30],"study_days":1}
+1747281600000;local;spontaneous_awakening;{"id":0}
+1747281660000;local;barcode_scanned;{"sample_expected":"s1","sample_scanned":"s1","barcode_value":"a","day_expected":1,"day_scanned":1}
+1747281720000;local;barcode_scanned;{"sample_expected":"s1","sample_scanned":"s1","barcode_value":"b","day_expected":1,"day_scanned":1}

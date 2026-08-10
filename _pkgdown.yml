@@ -10,7 +10,7 @@ reference:
       - starts_with("extract_")
       - summarize_protocol
       - summarize_source_audit
-  - title: Analysis
+  - title: Compliance and analysis
     contents:
       - merge_saliva
       - summarize_compliance
@@ -21,6 +21,10 @@ reference:
       - auc
       - slope
       - starts_with("plot_")
+  - title: Interactive review
+    contents:
+      - interactive_sampling_timeline
+      - conversion_report_editor
   - title: Synthetic data
     contents:
       - starts_with("generate_synthetic_")
@@ -35,3 +39,5 @@ reference:
       - max_increase
       - mean_se
       - standard_features
+      - saliva_feature_wide_to_long
+      - sample_times_datetime_to_minute

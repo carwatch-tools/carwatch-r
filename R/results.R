@@ -102,11 +102,22 @@ as_sample_events <- function(data) {
   long <- .results_long(data)
   sample_data <- .values_wide(dplyr::filter(long, .data$sample != "day"), c("participant", "day", "sample"))
   days <- as_study_days(data)
-  if ("awakening_time" %in% names(days) && !"awakening_time" %in% names(sample_data)) {
-    sample_data <- dplyr::left_join(sample_data, dplyr::select(days, dplyr::all_of(c("participant", "day", "awakening_time"))), by = c("participant", "day"))
+  day_context <- setdiff(names(days), c("participant", "day", "date", "mismatch_summary", names(sample_data)))
+  if (length(day_context)) {
+    sample_data <- dplyr::left_join(sample_data, dplyr::select(days, dplyr::all_of(c("participant", "day", day_context))), by = c("participant", "day"))
   }
   if (all(c("sampling_time", "awakening_time") %in% names(sample_data))) {
     sample_data$time_min <- as.numeric(difftime(sample_data$sampling_time, sample_data$awakening_time, units = "mins"))
+  }
+  if (!"sampling_event_recorded" %in% names(sample_data)) {
+    source_recorded <- if ("sampling_time_source" %in% names(sample_data)) sample_data$sampling_time_source == "app" else rep(FALSE, nrow(sample_data))
+    source_known <- if ("sampling_time_source" %in% names(sample_data)) !is.na(sample_data$sampling_time_source) else rep(FALSE, nrow(sample_data))
+    evidence <- rep(FALSE, nrow(sample_data))
+    for (field in intersect(c("sampling_time", "recorded_sample", "barcode"), names(sample_data))) evidence <- evidence | !is.na(sample_data[[field]])
+    sample_data$sampling_event_recorded <- ifelse(source_known, source_recorded, evidence)
+  }
+  if (!"sample_mismatch" %in% names(sample_data) && "recorded_sample" %in% names(sample_data)) {
+    sample_data$sample_mismatch <- ifelse(is.na(sample_data$recorded_sample), NA, sample_data$recorded_sample != sample_data$sample)
   }
   if (!"sample_position" %in% names(sample_data)) sample_data$sample_position <- match(sample_data$sample, unique(sample_data$sample))
   dplyr::arrange(sample_data, .data$participant, .data$day, .data$sample_position, .data$sample)
