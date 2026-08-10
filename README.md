@@ -9,9 +9,11 @@ sampling-quality information with laboratory biomarkers. Raw log events remain
 immutable evidence, registrations define protocol structure, corrections are
 second-pass decisions, and output retains timing and source provenance.
 
-This is a native R port of Python carwatch 1.0.0. It is usable for the workflow
-below but is not yet behavior-complete. See [PORT_STATUS.md](PORT_STATUS.md)
-for the explicit parity boundary.
+This is the native R port of `carwatch-python` 1.0.0. It preserves the Python
+package's semantic results, validation behavior, provenance, conversion-report
+workflow, and three-header CSV interchange while exposing R-native tibbles,
+S3 results, ggplot2 figures, and Shiny/DT tools. See
+[PORT_STATUS.md](PORT_STATUS.md) for the exact parity boundary.
 
 Executable R Markdown walkthroughs are in [examples/](examples/). Start with
 [the R Markdown workflow guide](docs/rmarkdown-workflows.md) for rendering,
@@ -329,10 +331,13 @@ the adjacent Python checkout:
 
 ~~~sh
 uv run python ../carwatch-r/tools/generate_python_fixtures.py
+python ../carwatch-r/tools/check_python_test_inventory.py tests
 ~~~
 
-Do not claim full Python parity until [PORT_STATUS.md](PORT_STATUS.md) is
-complete.
+The inventory gate maps all 216 named Python 1.0.0 test functions to the R
+contract suites. CI checks the port on R 4.3 and current R across Linux, macOS,
+and Windows, regenerates the Python-oracle fixtures, runs coverage, and builds
+the pkgdown site.
 
 ## License
 

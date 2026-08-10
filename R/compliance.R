@@ -89,15 +89,21 @@ summarize_compliance <- function(data, group_by = "sample_position") {
   spec <- attr(data, "column_spec"); samples <- as_sample_events(data)
   targets <- samples[remove, c("participant", "day", "sample"), drop = FALSE]
   result <- data
-  protected <- c("sample_position", "schedule_type", "expected_interval_min", "scheduled_sampling_time")
+  protected <- c(
+    "date", "registration", "registration_day", "study_name",
+    "registration_sources", "possible_reregistration",
+    "sample_position", "schedule_type", "expected_interval_min",
+    "scheduled_sampling_time", "expected_sample_count"
+  )
   for (i in seq_len(nrow(spec))) {
     key <- spec[i, ]
+    if (key$variable %in% protected || (!drop_entire_day && key$sample == "day")) next
     affected <- vapply(result$participant, function(participant) {
       rows <- targets$participant == participant & targets$day == key$day
       if (!drop_entire_day && key$sample != "day") rows <- rows & targets$sample == key$sample
       any(rows)
     }, logical(1))
-    if (drop_entire_day || !key$variable %in% protected) result[[key$name]] <- replace(result[[key$name]], affected, NA)
+    result[[key$name]] <- replace(result[[key$name]], affected, NA)
   }
   result
 }

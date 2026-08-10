@@ -3,5 +3,11 @@
 ^\.gitignore$
 ^\.Rproj\.user$
 ^README\.md$
+^_pkgdown\.yml$
+^CITATION\.cff$
+^docs$
+^examples$
+^LICENSE\.md$
+^PORT_STATUS\.md$
 ^renv$
 ^tests/testthat/_snaps$

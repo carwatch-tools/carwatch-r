@@ -1,0 +1,27 @@
+citHeader("To cite CARWatch in publications, use both the software package and associated article:")
+
+bibentry(
+  bibtype = "Manual",
+  title = "carwatch: Registration-Aware Processing of CARWatch Sampling Logs and Saliva Data",
+  author = person("Robert", "Richer"),
+  year = "2026",
+  note = "R package version 1.0.0",
+  url = "https://github.com/carwatch-tools/carwatch-r"
+)
+
+bibentry(
+  bibtype = "Article",
+  title = "CARWatch — A smartphone application for improving the accuracy of cortisol awakening response sampling",
+  author = c(
+    person("Robert", "Richer"),
+    person("Lena", "Abel"),
+    person("Arne", "Küderle"),
+    person("Bjoern M.", "Eskofier"),
+    person("Nicolas", "Rohleder")
+  ),
+  journal = "Psychoneuroendocrinology",
+  volume = "151",
+  pages = "106073",
+  year = "2023",
+  doi = "10.1016/j.psyneuen.2023.106073"
+)

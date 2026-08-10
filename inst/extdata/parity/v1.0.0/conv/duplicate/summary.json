@@ -1,0 +1,10 @@
+{
+  "canonical_day_count": 1,
+  "expected_sample_position_count": 2,
+  "input_event_count": 4,
+  "input_participant_count": 1,
+  "input_source_file_count": 1,
+  "issue_count": 2,
+  "output_participant_count": 1,
+  "recorded_sample_event_count": 0
+}

@@ -1,36 +1,46 @@
 # Port status
 
-This repository is a native R implementation in active parity development. It is not yet a
-behavior-complete replacement for `carwatch-python` 1.0.0.
+CARWatch for R 1.0.0 is the behavior-complete native R migration of
+`carwatch-python` 1.0.0. Parity means identical semantic results, validation
+outcomes, issue-report content, provenance, and three-header Study Results CSV
+interchange. It does not mean identical pandas, Matplotlib, or Jupyter object
+types.
 
-Implemented and locally tested:
+## Migrated behavior
 
-- Conventional MIT package metadata, roxygen documentation, namespace
-  declarations, and a clean local `R CMD check --no-manual`.
-- Python 1.0.0 development-oracle fixture generator plus versioned canonical
-  results, issue-report, source-audit, merge, compliance, and feature fixtures.
-- Direct CSV/ZIP loading and deterministic one-folder-per-participant source
-  selection, including nested archive members, hidden files, duplicate logical
-  exports, mismatch exclusions, and source audits.
-- Canonical three-header Study Results read/write, flat Study Manager imports,
-  display-only protection, canonical variable ordering, and typed restoration.
-- Registration-aware standard conversion with raw-event de-duplication,
-  registration-epoch source provenance, strict ambiguous/cyclic/backwards
-  protocol-order checks, manifest validation, re-registration reporting, and
-  canonical schedule reconstruction.
-- Two-pass conversion reports with deterministic issue IDs, stale-decision
-  rejection, scope drops, re-registration overrides, collection-date mapping,
-  scan-time ordering, manual-diary patches, and relative/absolute fallback
-  schedules.
-- Compliance summaries, saliva merging with physical-tube and positional swap
-  correction, response features, synthetic data, and static plots.
+- CSV, ZIP, nested-member, and participant-folder raw-log import with source
+  selection, de-duplication, exclusions, and source audits.
+- Registration-epoch reconstruction, cohort protocol resolution, manifests,
+  re-registration overrides, canonical schedules, and strict DST handling.
+- All 14 conversion issue codes, deterministic identities and occurrence
+  suffixes, two-pass decisions, supersession, stale-decision rejection, scope
+  drops, schedule fallbacks, and manual-diary patches.
+- Complete/display Study Results boundaries, flat Study Manager import, typed
+  restoration, and lossless Python-generated three-header CSV round-trips.
+- Physical-ID and positional saliva merging, swap correction, arbitrary
+  laboratory metadata, compliance, sampling anomalies, response features, and
+  static quality-control plots.
+- Registration-aware synthetic studies and configurable anomalies.
+- Interactive participant/day timelines and conversion-report decisions through
+  optional Shiny and DT components.
 
-Required before claiming Python 1.0 parity:
+## R-native representations
 
-- Exact Python 1.0.0 conversion-report identity/message/context equivalence,
-  including occurrence suffixes and all supersession cases.
-- Full Python merge metadata/index-level semantics and the complete
-  synthetic-data configuration surface.
-- Shiny/DT timeline and conversion-report editor.
-- Translation of the remaining Python behavioral suite, versioned differential
-  fixtures for each path, and CI on macOS, Linux, and Windows.
+- Complete results use a `carwatch_results` S3 tibble with a reversible
+  `(day, sample, variable)` column specification instead of pandas MultiIndex
+  columns.
+- Additional pandas index levels become validated R columns and are classified
+  globally as participant, participant-day, or sample metadata.
+- Static plots return ggplot2 objects; interactive notebook widgets are Shiny
+  applications and DT tables.
+- Python exceptions and warnings become stable `carwatch_*` R condition classes.
+
+## Parity evidence
+
+- The 216 named Python 1.0.0 test functions are pinned by module, count, and
+  test-name hash and mapped to focused `testthat` contract suites.
+- Versioned fixtures cover canonical results, raw-log source audits, exact
+  conversion reports, saliva merging, compliance, and response features.
+- CI regenerates fixtures using the pinned Python v1.0.0 package, rejects drift,
+  runs `R CMD check --as-cran` on R 4.3 and current R across Linux, macOS, and
+  Windows, runs coverage, and builds the pkgdown site.
