@@ -101,6 +101,10 @@
 #' @param day Canonical day identifier.
 #' @param show_expected Whether expected sampling times are shown.
 #' @return A ggplot object.
+#' @examples
+#' fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+#' results <- read_study_results(file.path(fixture, "results.csv"))
+#' plot_sampling_timeline(results, participant = "VP01", day = "D1")
 #' @export
 plot_sampling_timeline <- function(data, participant, day, show_expected = TRUE) {
   samples <- dplyr::filter(.plot_samples(data), .data$participant == .env$participant, .data$day == .env$day)
@@ -259,6 +263,10 @@ plot_sampling_timeline <- function(data, participant, day, show_expected = TRUE)
 #' @param by Summary grouping variable.
 #' @param view Plot form.
 #' @return A ggplot object.
+#' @examples
+#' fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+#' results <- read_study_results(file.path(fixture, "results.csv"))
+#' plot_compliance_overview(results)
 #' @export
 plot_compliance_overview <- function(data, by = "sample_position", view = c("proportion", "heatmap")) {
   view <- match.arg(view)
@@ -362,6 +370,10 @@ plot_compliance_overview <- function(data, by = "sample_position", view = c("pro
 #' @param data Canonical results or sample events.
 #' @param by Grouping variable. Defaults to `sample_position`.
 #' @return A ggplot object.
+#' @examples
+#' fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+#' results <- read_study_results(file.path(fixture, "results.csv"))
+#' plot_timing_deviation(results)
 #' @export
 plot_timing_deviation <- function(data, by = "sample_position") {
   .assert_plot_field(by, "by")
@@ -400,6 +412,12 @@ plot_timing_deviation <- function(data, by = "sample_position") {
 #' @param seed Integer random seed, or `NULL` to use the current R RNG state.
 #' @param show_individual Whether individual participant-day curves are drawn.
 #' @return A ggplot object.
+#' @examples
+#' fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+#' results <- read_study_results(file.path(fixture, "results.csv"))
+#' saliva <- read_saliva(file.path(fixture, "saliva.csv"))
+#' merged <- merge_saliva(results, saliva)
+#' plot_saliva_curve(merged, ci = NULL)
 #' @export
 plot_saliva_curve <- function(data, value = "cortisol", participant = NULL, day = NULL, group_by = NULL, ci = 95, n_boot = 1000, seed = 0, show_individual = TRUE) {
   .assert_plot_field(value, "value")

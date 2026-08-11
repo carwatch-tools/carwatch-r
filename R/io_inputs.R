@@ -57,6 +57,10 @@ read_manual_diary <- function(path) {
 #' @param tz IANA timezone for Unix timestamps.
 #' @param errors Invalid-payload handling: `"error"`, `"warn"`, or `"ignore"`.
 #' @return A tibble of immutable raw events.
+#' @examples
+#' fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+#' raw_logs <- read_raw_logs(file.path(fixture, "raw", "VP01"))
+#' head(raw_logs)
 #' @export
 read_raw_logs <- function(path, tz = "Europe/Berlin", errors = c("raise", "warn", "ignore", "error")) {
   errors <- match.arg(errors); if (identical(errors, "raise")) errors <- "error"
@@ -77,6 +81,11 @@ read_raw_logs <- function(path, tz = "Europe/Berlin", errors = c("raise", "warn"
 #' @param errors Invalid-payload handling.
 #' @param create_report Whether to return the source audit.
 #' @return Raw events, or a raw-events/source-audit list.
+#' @examples
+#' fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+#' folders <- c(VP01 = file.path(fixture, "raw", "VP01"))
+#' imported <- read_raw_logs_from_participant_dirs(folders, create_report = TRUE)
+#' head(imported$source_audit)
 #' @export
 read_raw_logs_from_participant_dirs <- function(participant_dirs, tz = "Europe/Berlin", errors = c("raise", "warn", "ignore", "error"), create_report = FALSE) {
   errors <- match.arg(errors); if (identical(errors, "raise")) errors <- "error"; .assert_scalar_logical(create_report, "create_report")

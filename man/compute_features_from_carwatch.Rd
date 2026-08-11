@@ -26,3 +26,10 @@ Per participant-day response features.
 \description{
 Compute CARWatch saliva features using sample position and actual time
 }
+\examples{
+fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+results <- read_study_results(file.path(fixture, "results.csv"))
+saliva <- read_saliva(file.path(fixture, "saliva.csv"))
+merged <- merge_saliva(results, saliva)
+compute_features_from_carwatch(merged)
+}

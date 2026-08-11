@@ -21,3 +21,8 @@ Reads the three-header CSV produced by either \code{carwatch-python} or
 \code{write_study_results()}. The returned object preserves opaque identifiers,
 time zones, and column placement.
 }
+\examples{
+fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+results <- read_study_results(file.path(fixture, "results.csv"))
+as_study_days(results)
+}

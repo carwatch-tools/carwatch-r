@@ -15,6 +15,12 @@
 #'   levels. Constant participant-day values are stored at the canonical day
 #'   level; values varying within any day stay sample-level everywhere.
 #' @return Complete canonical results with laboratory and merge-provenance fields.
+#' @examples
+#' fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+#' results <- read_study_results(file.path(fixture, "results.csv"))
+#' saliva <- read_saliva(file.path(fixture, "saliva.csv"))
+#' merged <- merge_saliva(results, saliva)
+#' as_sample_events(merged)[c("participant", "sample", "cortisol")]
 #' @export
 merge_saliva <- function(study_results, saliva, correct_swaps = TRUE, match_on = c("sample", "position", "physical_id"), missing_carwatch_data = c("ignore", "raise"), metadata_cols = NULL) {
   .require_complete_results(study_results)

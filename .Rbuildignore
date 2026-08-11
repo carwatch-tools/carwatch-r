@@ -5,6 +5,7 @@
 ^README\.md$
 ^_pkgdown\.yml$
 ^CITATION\.cff$
+^cran-comments\.md$
 ^docs$
 ^examples$
 ^LICENSE\.md$
@@ -12,3 +13,6 @@
 ^renv$
 ^tests/testthat/_snaps$
 ^tools/render_examples\.R$
+^tools/check_python_test_inventory\.py$
+^tools/generate_python_fixtures\.py$
+^tools/generate_readme_figures\.R$

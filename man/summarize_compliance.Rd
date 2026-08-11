@@ -11,6 +11,14 @@ summarize_compliance(data, group_by = "sample_position")
 
 \item{group_by}{Grouping column(s), or \code{NULL} for a cohort total.}
 }
+\value{
+A tibble with assessed, compliant, non-compliant, and unassessed counts.
+}
 \description{
 Summarize sampling compliance
+}
+\examples{
+fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+results <- read_study_results(file.path(fixture, "results.csv"))
+summarize_compliance(results)
 }

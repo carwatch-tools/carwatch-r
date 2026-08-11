@@ -75,6 +75,11 @@ find_non_compliant_samples <- function(data) {
 #' Summarize sampling compliance
 #' @param data Canonical results or a sample-event tibble.
 #' @param group_by Grouping column(s), or `NULL` for a cohort total.
+#' @return A tibble with assessed, compliant, non-compliant, and unassessed counts.
+#' @examples
+#' fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+#' results <- read_study_results(file.path(fixture, "results.csv"))
+#' summarize_compliance(results)
 #' @export
 summarize_compliance <- function(data, group_by = "sample_position") {
   samples <- .as_samples(data); .require_columns(samples, "sample_compliant", "Sample data")

@@ -6,7 +6,7 @@ if (!length(script_argument)) {
 
 script_path <- normalizePath(sub("^--file=", "", script_argument[[1]]))
 package_root <- normalizePath(file.path(dirname(script_path), ".."))
-output_dir <- file.path(package_root, "docs", "images")
+output_dir <- file.path(package_root, "man", "figures")
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
 if (!requireNamespace("pkgload", quietly = TRUE)) {

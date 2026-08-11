@@ -44,3 +44,10 @@ Canonical results, or a results/report list.
 The first pass only reports issues. Decisions passed through \code{issue_decisions}
 are the only allowed route for corrections; raw event rows are never changed.
 }
+\examples{
+fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+raw_logs <- read_raw_logs(file.path(fixture, "raw", "VP01"))
+converted <- convert_raw_logs(raw_logs, errors = "warn", create_report = TRUE)
+converted$report$issues
+as_sample_events(converted$results)
+}

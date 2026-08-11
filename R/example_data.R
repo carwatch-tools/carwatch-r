@@ -226,6 +226,18 @@
 #' @param overwrite Whether an existing target directory may be replaced.
 #' @param validate Run advisory and submitted-decision conversion after writing.
 #' @return The normalized output directory path.
+#' @examples
+#' output <- tempfile("carwatch-study-")
+#' generate_synthetic_study_data(
+#'   output,
+#'   study_config = list(study_days = 1, saliva_distances = c(0, 30)),
+#'   n_participants = 1,
+#'   non_compliant_sample_ratio = 0,
+#'   missing_awakening_time_ratio = 0,
+#'   missing_sampling_time_ratio = 0,
+#'   validate = FALSE
+#' )
+#' unlink(output, recursive = TRUE)
 #' @export
 generate_synthetic_study_data <- function(output_dir, study_config = NULL, n_participants = NULL, non_compliant_sample_ratio = 0.10, missing_awakening_time_ratio = 0.01, missing_sampling_time_ratio = 0.02, random_state = 42L, create_cortisol_data = FALSE, overwrite = FALSE, validate = TRUE) {
   .assert_scalar_logical(overwrite, "overwrite"); .assert_scalar_logical(create_cortisol_data, "create_cortisol_data"); .assert_scalar_logical(validate, "validate")

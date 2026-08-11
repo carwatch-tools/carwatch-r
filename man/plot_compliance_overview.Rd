@@ -23,3 +23,8 @@ A ggplot object.
 \description{
 Plot cohort sampling compliance
 }
+\examples{
+fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+results <- read_study_results(file.path(fixture, "results.csv"))
+plot_compliance_overview(results)
+}

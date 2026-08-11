@@ -38,3 +38,10 @@ Raw tube identifiers remain opaque. With match_on = "sample" values are
 matched to the recorded tube (falling back to the scheduled tube); with
 match_on = "position" they are matched to registration-aware positions.
 }
+\examples{
+fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+results <- read_study_results(file.path(fixture, "results.csv"))
+saliva <- read_saliva(file.path(fixture, "saliva.csv"))
+merged <- merge_saliva(results, saliva)
+as_sample_events(merged)[c("participant", "sample", "cortisol")]
+}

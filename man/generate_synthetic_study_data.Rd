@@ -53,3 +53,16 @@ matching manual diary/decision report. The source events themselves are
 never patched. Study Manager snake-case, camelCase, and QR aliases are
 accepted, including multiple registration blocks and opaque saliva IDs.
 }
+\examples{
+output <- tempfile("carwatch-study-")
+generate_synthetic_study_data(
+  output,
+  study_config = list(study_days = 1, saliva_distances = c(0, 30)),
+  n_participants = 1,
+  non_compliant_sample_ratio = 0,
+  missing_awakening_time_ratio = 0,
+  missing_sampling_time_ratio = 0,
+  validate = FALSE
+)
+unlink(output, recursive = TRUE)
+}

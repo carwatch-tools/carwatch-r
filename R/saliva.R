@@ -157,6 +157,17 @@ slope <- function(data, sample_labels = NULL, sample_idx = NULL, saliva_type = "
 #' @param slope_pairs Sample pairs for slopes.
 #' @param remove_s0 Whether to remove baseline sample S0.
 #' @return Group-level response features.
+#' @examples
+#' curve <- tibble::tibble(
+#'   participant = "P01", sample = paste0("S", 1:4),
+#'   time_min = c(0, 30, 45, 60), cortisol = c(5, 9, 8, 7)
+#' )
+#' compute_features(
+#'   curve,
+#'   group_levels = "participant",
+#'   sample_level = "sample",
+#'   sample_times = "time_min"
+#' )
 #' @export
 compute_features <- function(data, saliva_type = "cortisol", group_levels = NULL, sample_level = NULL, sample_times = NULL, slope_pairs = NULL, remove_s0 = FALSE) {
   .multi_analyte(data, saliva_type, function(analyte) {
@@ -186,6 +197,12 @@ compute_features <- function(data, saliva_type = "cortisol", group_levels = NULL
 #' @param slope_pairs Sample pairs for slopes.
 #' @param group_levels Additional R column names that identify separate curves.
 #' @return Per participant-day response features.
+#' @examples
+#' fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+#' results <- read_study_results(file.path(fixture, "results.csv"))
+#' saliva <- read_saliva(file.path(fixture, "saliva.csv"))
+#' merged <- merge_saliva(results, saliva)
+#' compute_features_from_carwatch(merged)
 #' @export
 compute_features_from_carwatch <- function(data, saliva_type = "cortisol", slope_pairs = NULL, group_levels = NULL) {
   if (inherits(data, "carwatch_results")) data <- as_sample_events(data)

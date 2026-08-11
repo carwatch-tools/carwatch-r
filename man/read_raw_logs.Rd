@@ -23,3 +23,8 @@ A tibble of immutable raw events.
 \description{
 Read CARWatch raw log files
 }
+\examples{
+fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+raw_logs <- read_raw_logs(file.path(fixture, "raw", "VP01"))
+head(raw_logs)
+}

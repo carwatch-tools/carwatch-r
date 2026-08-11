@@ -26,3 +26,9 @@ Raw events, or a raw-events/source-audit list.
 \description{
 Read raw logs from one explicitly mapped folder per participant
 }
+\examples{
+fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+folders <- c(VP01 = file.path(fixture, "raw", "VP01"))
+imported <- read_raw_logs_from_participant_dirs(folders, create_report = TRUE)
+head(imported$source_audit)
+}

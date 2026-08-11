@@ -2,12 +2,19 @@ Package: carwatch
 Title: Registration-Aware Processing of CARWatch Sampling Logs and Saliva Data
 Version: 1.0.0
 Authors@R: 
-    person("Robert", "Richer", email = "robert.richer@fau.de", role = c("aut", "cre"))
-Author: Robert Richer [aut, cre]
-Maintainer: Robert Richer <robert.richer@fau.de>
-Description: Reconstruct CARWatch registrations from immutable app logs,
-    review conversion anomalies through an auditable two-pass workflow, and
-    combine sampling-compliance information with saliva biomarkers.
+    person(
+      "Robert", "Richer",
+      email = "robert.richer@fau.de",
+      role = c("aut", "cre"),
+      comment = c(ORCID = "0000-0003-0272-5403")
+    )
+Description: Import and reconstruct saliva-sampling studies recorded by the
+    'CARWatch' application. Registration metadata and raw barcode events are
+    converted into auditable study days and scheduled sample positions using a
+    two-pass issue-review workflow. Functions assess sampling-time compliance,
+    merge laboratory saliva measurements, calculate response features, and
+    create quality-control visualizations. The application is described by
+    Richer et al. (2023) <doi:10.1016/j.psyneuen.2023.106073>.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Language: en-GB
@@ -30,12 +37,14 @@ Imports:
 Suggests:
     covr,
     DT,
+    knitr,
     pkgdown,
     rmarkdown,
     roxygen2,
     shiny,
     shinytest2,
     testthat (>= 3.2.0)
+VignetteBuilder: knitr
 Config/testthat/edition: 3
 URL: https://carwatch-tools.github.io/carwatch-r,
     https://github.com/carwatch-tools/carwatch-r

@@ -35,3 +35,15 @@ Group-level response features.
 \description{
 Compute the standard CARWatch saliva response feature set
 }
+\examples{
+curve <- tibble::tibble(
+  participant = "P01", sample = paste0("S", 1:4),
+  time_min = c(0, 30, 45, 60), cortisol = c(5, 9, 8, 7)
+)
+compute_features(
+  curve,
+  group_levels = "participant",
+  sample_level = "sample",
+  sample_times = "time_min"
+)
+}

@@ -750,6 +750,12 @@ summarize_protocol <- function(raw_logs, protocol_manifest = NULL, errors = c("r
 #' @param check_compliance Whether to calculate timing compliance.
 #' @param compliance_checker Timing tolerance configuration.
 #' @return Canonical results, or a results/report list.
+#' @examples
+#' fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+#' raw_logs <- read_raw_logs(file.path(fixture, "raw", "VP01"))
+#' converted <- convert_raw_logs(raw_logs, errors = "warn", create_report = TRUE)
+#' converted$report$issues
+#' as_sample_events(converted$results)
 #' @export
 convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("raise", "warn", "error"), create_report = FALSE, issue_decisions = NULL, sampling_schedule = NULL, manual_diary = NULL, check_compliance = TRUE, compliance_checker = new_sampling_compliance_checker()) {
   errors <- match.arg(errors); if (identical(errors, "error")) errors <- "raise"

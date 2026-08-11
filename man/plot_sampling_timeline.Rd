@@ -26,3 +26,8 @@ recorded relative samples, and arrows show the signed deviation from the
 app-updated target. Missing relative scans break the adaptive target chain.
 Missing events and scheduled/recorded sample mismatches remain visible.
 }
+\examples{
+fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+results <- read_study_results(file.path(fixture, "results.csv"))
+plot_sampling_timeline(results, participant = "VP01", day = "D1")
+}

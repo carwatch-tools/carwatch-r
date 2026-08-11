@@ -54,6 +54,10 @@
 #' @param tz IANA study timezone.
 #' @param simple Return a display-only subset.
 #' @return A `carwatch_results` object.
+#' @examples
+#' fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+#' results <- read_study_results(file.path(fixture, "results.csv"))
+#' as_study_days(results)
 #' @export
 read_study_results <- function(path, tz = "Europe/Berlin", simple = FALSE) {
   .assert_scalar_logical(simple, "simple")
@@ -87,6 +91,12 @@ read_study_results <- function(path, tz = "Europe/Berlin", simple = FALSE) {
 #'
 #' @param data Complete `carwatch_results` object.
 #' @param path Destination CSV path.
+#' @examples
+#' fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+#' results <- read_study_results(file.path(fixture, "results.csv"))
+#' output <- tempfile(fileext = ".csv")
+#' write_study_results(results, output)
+#' restored <- read_study_results(output)
 #' @export
 write_study_results <- function(data, path) {
   .require_complete_results(data)

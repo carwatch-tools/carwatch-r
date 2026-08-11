@@ -1,0 +1,99 @@
+---
+title: "Getting started with CARWatch"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting started with CARWatch}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+CARWatch turns app log exports into a study table with one planned position for
+every participant, study day, and saliva sample. The original log events remain
+unchanged. If information is missing or inconsistent, conversion produces a
+review report instead of silently guessing.
+
+## Import the raw logs
+
+For studies stored as one folder per participant, pass a named vector of
+folders. The names become participant identifiers.
+
+```{r import}
+library(carwatch)
+
+fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+participant_dirs <- c(VP01 = file.path(fixture, "raw", "VP01"))
+
+imported <- read_raw_logs_from_participant_dirs(
+  participant_dirs,
+  create_report = TRUE
+)
+raw_logs <- imported$raw_logs
+head(imported$source_audit)
+```
+
+The source audit records which CSV or ZIP input was selected and why another
+candidate was skipped.
+
+## Convert in two passes
+
+The first pass reconstructs the registrations, study days, and planned samples.
+Use `errors = "warn"` so unresolved cases are returned for review.
+
+```{r first-pass}
+first_pass <- convert_raw_logs(
+  raw_logs,
+  errors = "warn",
+  create_report = TRUE
+)
+first_pass$report$issues
+```
+
+For a real study, save the report with `write_conversion_report()`. Enter one
+allowed decision per issue in the CSV, or use `conversion_report_editor()` for
+an interactive review. Then read the decisions and rerun conversion against the
+same raw logs:
+
+```{r second-pass, eval = FALSE}
+write_conversion_report(first_pass$report, "conversion-issues.csv")
+decisions <- read_conversion_report("conversion-issues.csv")
+
+study_results <- convert_raw_logs(
+  raw_logs,
+  issue_decisions = decisions,
+  errors = "raise"
+)
+```
+
+The bundled fixture has no unresolved issues, so its first-pass results can be
+used directly here.
+
+```{r results}
+study_results <- first_pass$results
+as_study_days(study_results)
+head(as_sample_events(study_results))
+summarize_compliance(study_results)
+```
+
+## Save and restore Study Results
+
+Complete Study Results use a three-header CSV format so day-, sample-, and
+variable-level information remains unambiguous.
+
+```{r roundtrip}
+results_file <- tempfile(fileext = ".csv")
+write_study_results(study_results, results_file)
+restored <- read_study_results(results_file)
+restored
+```
+
+Use `simple = TRUE` only for display. A simplified result intentionally cannot
+be saved as a complete Study Results file.
+
+## Continue with laboratory data
+
+After conversion, load the laboratory measurements with `read_saliva()`, merge
+them with `merge_saliva()`, and continue with the saliva-analysis vignette.

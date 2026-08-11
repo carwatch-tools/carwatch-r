@@ -14,3 +14,10 @@ write_study_results(data, path)
 \description{
 Write canonical CARWatch Study Results
 }
+\examples{
+fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+results <- read_study_results(file.path(fixture, "results.csv"))
+output <- tempfile(fileext = ".csv")
+write_study_results(results, output)
+restored <- read_study_results(output)
+}

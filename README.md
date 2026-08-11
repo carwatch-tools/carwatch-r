@@ -27,6 +27,9 @@ The features include:
 The [examples directory](examples/) contains four end-to-end R Markdown
 walkthroughs and nine focused gallery workflows. Start with
 [the tutorial guide](docs/tutorials.md) to choose and run a tutorial.
+The [package website](https://carwatch-tools.github.io/carwatch-r) provides the
+installed-package tutorials and a searchable reference for every public
+function.
 
 
 ## Installation
@@ -95,9 +98,9 @@ Final conversion: create complete Study Results
 ~~~
 
 The two conversion passes are intentional. The first pass shows how CARWatch
-understands the app logs and identifies any issues that need attention in resolving. The
-second pass applies the decisions you reviewed. The original app exports remain
-unchanged throughout.
+understands the app logs and identifies records that need review. The second
+pass applies the submitted decisions to the original logs. The app exports
+remain unchanged throughout.
 
 ### Basic concepts
 
@@ -238,6 +241,14 @@ You can resolve the reported issues either in a spreadsheet or in the
 interactive CARWatch decision editor. Both approaches produce the `decisions`
 table used by the final conversion.
 
+Load the manual diary when report decisions use it as a fallback. Omit this
+line and the `manual_diary` arguments below when the study has no accepted
+manual-diary decisions.
+
+~~~r
+manual_diary <- read_manual_diary("manual_diary.csv")
+~~~
+
 **Option A: edit the report in a spreadsheet.** Open the CSV, choose a decision
 for each listed issue, and save it without changing the identifying columns.
 Then reload it:
@@ -249,14 +260,15 @@ decisions <- read_conversion_report("conversion_issues.csv")
 **Option B: resolve the issues interactively.** This requires the optional
 `shiny` and `DT` packages:
 
-![CARWatch conversion report editor with issue table on the left and decision controls on the right](docs/images/conversion_report_editor.svg)
+![CARWatch conversion report editor with issue table on the left and decision controls on the right](man/figures/conversion_report_editor.svg)
 
 The figure shows the editor layout; the rows and values are illustrative.
 
 ~~~r
 decisions <- conversion_report_editor(
   initial$report,
-  raw_logs = raw_logs
+  raw_logs = raw_logs,
+  manual_diary = manual_diary
 )
 
 write_conversion_report(decisions, "conversion_issues.csv")
@@ -303,7 +315,8 @@ final <- convert_raw_logs(
   raw_logs,
   errors = "raise",
   create_report = TRUE,
-  issue_decisions = decisions
+  issue_decisions = decisions,
+  manual_diary = manual_diary
 )
 study_results <- final$results
 ~~~
@@ -429,7 +442,7 @@ source of the recorded time.
 plot_sampling_timeline(study_results, participant = "vp01", day = "D1")
 ~~~
 
-![Sampling timeline showing planned and recorded collection times](docs/images/sampling_timeline.png)
+![Sampling timeline showing planned and recorded collection times](man/figures/sampling_timeline.png)
 
 The compliance overview summarizes compliant, non-compliant, and unassessed
 samples at each sampling position.
@@ -438,7 +451,7 @@ samples at each sampling position.
 plot_compliance_overview(study_results)
 ~~~
 
-![Proportion of compliant, non-compliant, and unassessed samples by sampling position](docs/images/compliance_overview.png)
+![Proportion of compliant, non-compliant, and unassessed samples by sampling position](man/figures/compliance_overview.png)
 
 The deviation plot shows how early or late samples were collected at each
 sampling position. Individual points are retained behind the boxplots.
@@ -447,7 +460,7 @@ sampling position. Individual points are retained behind the boxplots.
 plot_timing_deviation(study_results)
 ~~~
 
-![Distribution of sampling-time deviations by sample position](docs/images/timing_deviation.png)
+![Distribution of sampling-time deviations by sample position](man/figures/timing_deviation.png)
 
 The saliva curve retains the individual participant-day trajectories and adds
 the mean response with its confidence interval.
@@ -460,13 +473,20 @@ plot_saliva_curve(
 )
 ~~~
 
-![Individual and mean cortisol response curves over time since awakening](docs/images/saliva_curve.png)
+![Individual and mean cortisol response curves over time since awakening](man/figures/saliva_curve.png)
 
-These figures are generated from deterministic synthetic data with
-`Rscript tools/generate_readme_figures.R`.
+These figures are generated from deterministic synthetic data with:
 
-For generic long-format saliva data, use compute_features, auc, max_value,
-initial_value, max_increase, or slope.
+~~~sh
+Rscript tools/generate_readme_figures.R
+~~~
+
+The R and Python figure generators use the same study configuration, 40
+participants, anomaly ratios, random seed, bootstrap settings, figure sizes,
+and resolution.
+
+For generic long-format saliva data, use `compute_features()`, `auc()`,
+`max_value()`, `initial_value()`, `max_increase()`, or `slope()`.
 
 ### Optional interactive review
 
@@ -477,27 +497,9 @@ reports:
 interactive_sampling_timeline(study_results)
 ~~~
 
-Edit a first-pass conversion report with issue-specific decision choices. The
-editor returns the completed decision table when you press `Done`.
-
-~~~r
-decisions <- conversion_report_editor(
-  initial$report,
-  raw_logs = raw_logs,
-  manual_diary = manual_diary
-)
-write_conversion_report(decisions, "conversion_issues.csv")
-~~~
-
-The issue table is displayed on the left and the decision controls on the
-right. Select **Apply decision**, then **Refresh remaining issues** to rerun the
-conversion against the original raw logs. The visible table is replaced by the
-remaining unresolved issues while accepted upstream decisions stay in the
-history returned by `Done`.
-
 Use `launch = FALSE` only when embedding an app or working on the package.
 
-## Synthetic data
+### Synthetic data
 
 Generate deterministic local example data:
 
@@ -518,6 +520,18 @@ The generated directory contains raw logs, `manual_diary.csv`, a ready-to-submit
 The example data are useful for learning the workflow without changing real
 study files.
 
+## For developers
+
+Package checks, example rendering, and continuous integration are documented
+in [Development](docs/development.md).
+
+## Contributing
+
+Bug reports, feature requests, and reproducible examples belong in the
+[GitHub issue tracker](https://github.com/carwatch-tools/carwatch-r/issues).
+Changes should include tests and documentation for the affected research
+workflow.
+
 ## Citation
 
 Report the package version used in an analysis. For research using CARWatch,
@@ -525,13 +539,14 @@ cite:
 
 > Richer, R., Abel, L., Küderle, A., Eskofier, B. M., & Rohleder, N. (2023).
 > CARWatch — A smartphone application for improving the accuracy of cortisol
-> awakening response sampling. Psychoneuroendocrinology, 151, 106073.
+> awakening response sampling. *Psychoneuroendocrinology, 151*, 106073.
 > https://doi.org/10.1016/j.psyneuen.2023.106073
 
-## Development
+The installed package version is available as:
 
-Package checks, example rendering, and continuous integration are documented
-in [Development](docs/development.md).
+~~~r
+packageVersion("carwatch")
+~~~
 
 ## License
 

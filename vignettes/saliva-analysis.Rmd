@@ -1,0 +1,74 @@
+---
+title: "Saliva analysis with CARWatch"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Saliva analysis with CARWatch}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+This workflow starts with complete Study Results and a long laboratory CSV.
+The laboratory file contains one row per participant and physical tube ID.
+
+```{r load}
+library(carwatch)
+
+fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+study_results <- read_study_results(file.path(fixture, "results.csv"))
+saliva <- read_saliva(file.path(fixture, "saliva.csv"))
+
+saliva
+```
+
+## Merge laboratory values
+
+Matching by sample uses the physical tube recorded by the app. This preserves
+the distinction between the tube planned for a position and the tube actually
+scanned there.
+
+```{r merge}
+merged <- merge_saliva(study_results, saliva, match_on = "sample")
+samples <- as_sample_events(merged)
+samples[c(
+  "participant", "day", "sample_position", "sample", "recorded_sample",
+  "cortisol", "sample_compliant", "mismatch_corrected"
+)]
+```
+
+If a laboratory export identifies observations by day and sample position,
+use `match_on = "position"` and provide the `day` and `sample_position`
+columns instead.
+
+## Calculate response features
+
+`compute_features_from_carwatch()` orders each curve by registered sample
+position and uses the actual minutes since awakening.
+
+```{r features}
+compute_features_from_carwatch(merged, saliva_type = "cortisol")
+```
+
+## Inspect timing and measurements
+
+```{r timeline, fig.width = 7, fig.height = 4.5}
+plot_sampling_timeline(merged, participant = "VP01", day = "D1")
+```
+
+```{r compliance, fig.width = 7, fig.height = 4.5}
+plot_compliance_overview(merged)
+```
+
+```{r deviation, fig.width = 7, fig.height = 4.5}
+plot_timing_deviation(merged)
+```
+
+```{r curve, fig.width = 7, fig.height = 4.5}
+plot_saliva_curve(merged, value = "cortisol", ci = NULL)
+```
+
+These plots return ordinary `ggplot2` objects, so themes, labels, and export
+settings can be adjusted with the normal `ggplot2` workflow.

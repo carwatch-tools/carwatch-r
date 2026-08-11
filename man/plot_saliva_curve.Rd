@@ -44,3 +44,10 @@ participant-day curves. Thick lines connect group means calculated
 separately at each registered \code{sample_position}; shaded ribbons show BCa
 bootstrap confidence intervals when at least two measurements contribute.
 }
+\examples{
+fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
+results <- read_study_results(file.path(fixture, "results.csv"))
+saliva <- read_saliva(file.path(fixture, "saliva.csv"))
+merged <- merge_saliva(results, saliva)
+plot_saliva_curve(merged, ci = NULL)
+}

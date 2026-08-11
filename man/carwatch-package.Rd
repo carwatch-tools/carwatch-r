@@ -6,22 +6,23 @@
 \alias{carwatch-package}
 \title{Package namespace declarations}
 \description{
-Reconstruct CARWatch registrations from immutable app logs, review conversion anomalies through an auditable two-pass workflow, and combine sampling-compliance information with saliva biomarkers.
+Import and reconstruct saliva-sampling studies recorded by the 'CARWatch' application. Registration metadata and raw barcode events are converted into auditable study days and scheduled sample positions using a two-pass issue-review workflow. Functions assess sampling-time compliance, merge laboratory saliva measurements, calculate response features, and create quality-control visualizations. The application is described by Richer et al. (2023) \doi{10.1016/j.psyneuen.2023.106073}.
 }
 \seealso{
 Useful links:
 \itemize{
+  \item \url{https://carwatch-tools.github.io/carwatch-r}
   \item \url{https://github.com/carwatch-tools/carwatch-r}
   \item Report bugs at \url{https://github.com/carwatch-tools/carwatch-r/issues}
 }
 
 }
 \author{
-\strong{Maintainer}: Robert Richer \email{robert.richer@fau.de}
+\strong{Maintainer}: Robert Richer \email{robert.richer@fau.de} (\href{https://orcid.org/0000-0003-0272-5403}{ORCID})
 
 Authors:
 \itemize{
-  \item Robert Richer \email{robert.richer@fau.de}
+  \item Robert Richer \email{robert.richer@fau.de} (\href{https://orcid.org/0000-0003-0272-5403}{ORCID})
 }
 
 }
