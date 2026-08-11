@@ -855,13 +855,13 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("rai
         } else issues[[length(issues) + 1L]] <- .new_conversion_issue("invalid_study_metadata", sprintf("Invalid 'study_metadata' payload without usable 'saliva_ids': participant=%s, source_file=%s.", .python_scalar_repr(participant), .python_scalar_repr(event$source_file[[1]])), participant, details = list(source_file = event$source_file[[1]], payload = event$payload[[1]]), proposed_action = "ignore_metadata_event", proposed_action_description = "The invalid metadata event is ignored; the preceding usable registration remains active.")
         next
       }
-      if (!event$action[[1]] %in% c("barcode_scanned", "spontaneous_awakening", "alarm")) next
+      if (!event$action[[1]] %in% c("barcode_scanned", "spontaneous_awakening", "alarm_stop", "alarm")) next
       if (event$action[[1]] == "barcode_scanned" && !metadata_seen) {
         issues[[length(issues) + 1L]] <- .new_conversion_issue("scan_before_registration_metadata", sprintf("Barcode scan occurs before usable registration metadata: participant=%s, source_file=%s.", .python_scalar_repr(participant), .python_scalar_repr(event$source_file[[1]])), participant, details = list(timestamp = event$timestamp[[1]], source_file = event$source_file[[1]], payload = event$payload[[1]]), proposed_action = "drop_sample", proposed_action_description = "The scan is excluded because no active sampling configuration can resolve it.")
         next
       }
       if (event$action[[1]] == "barcode_scanned") collection_started <- TRUE
-      if (event$action[[1]] %in% c("spontaneous_awakening", "alarm")) {
+      if (event$action[[1]] %in% c("spontaneous_awakening", "alarm_stop", "alarm")) {
         event_date <- as.Date(event$timestamp[[1]], tz = timezone)
         same_date_scan <- events$action == "barcode_scanned" & as.Date(events$timestamp, tz = timezone) == event_date
         expected_days <- unique(vapply(events$payload[same_date_scan], function(payload) suppressWarnings(as.integer(.payload_value(payload, "day_expected", NA_integer_))), integer(1)))
@@ -911,7 +911,8 @@ convert_raw_logs <- function(raw_logs, protocol_manifest = NULL, errors = c("rai
         day <- .coerce_event_day(event, schedule, active_registration)
       }
       if (is.na(day)) next
-      records[[length(records) + 1L]] <- tibble::tibble(participant = participant, day = day, action = event$action[[1]], timestamp = event$timestamp[[1]], payload = list(event$payload[[1]]), source_file = event$source_file[[1]], registration = active_registration, registration_sources = paste(registration_sources[[as.character(active_registration)]] %||% character(), collapse = ";"), scheduled_sample_override = if (event$action[[1]] == "barcode_scanned") scheduled_sample_override else NA_character_, recorded_sample_override = if (event$action[[1]] == "barcode_scanned") recorded_sample_override else NA_character_)
+      normalized_action <- if (event$action[[1]] == "alarm_stop") "alarm" else event$action[[1]]
+      records[[length(records) + 1L]] <- tibble::tibble(participant = participant, day = day, action = normalized_action, timestamp = event$timestamp[[1]], payload = list(event$payload[[1]]), source_file = event$source_file[[1]], registration = active_registration, registration_sources = paste(registration_sources[[as.character(active_registration)]] %||% character(), collapse = ";"), scheduled_sample_override = if (event$action[[1]] == "barcode_scanned") scheduled_sample_override else NA_character_, recorded_sample_override = if (event$action[[1]] == "barcode_scanned") recorded_sample_override else NA_character_)
     }
   }
   event_records <- if (length(records)) dplyr::bind_rows(records) else tibble::tibble(participant = character(), day = character(), action = character(), timestamp = as.POSIXct(character()), payload = list(), source_file = character(), registration = integer(), registration_sources = character(), scheduled_sample_override = character(), recorded_sample_override = character())
