@@ -6,17 +6,17 @@ output:
     toc_float: true
 ---
 
-This walkthrough mirrors the Python log-processing notebook using the native R
-API. It creates a deterministic local study, imports immutable raw logs,
-inspects the advisory conversion report, applies the generated decisions and
-manual diary, then writes complete Study Results.
+This walkthrough creates a local example study, imports the app logs, reviews
+the first conversion report, applies the generated decisions and manual diary,
+then writes complete Study Results.
 
 ```{r setup}
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
-library(carwatch)
+#library(carwatch)
+pkgload::load_all("..", reset = TRUE)
 
 # Use a disposable directory. Set this to a project data directory for a real
-# study, then retain the generated report and final results as audit artifacts.
+# study, then keep the generated report and final results with the study files.
 study_dir <- file.path(tempdir(), "carwatch-r-log-example")
 ```
 
@@ -39,11 +39,11 @@ generate_synthetic_study_data(
 list.files(study_dir, recursive = TRUE)
 ```
 
-## Import raw logs and source audit
+## Import raw logs and check the imported files
 
 For real studies, replace `study_dir` with one folder per participant. The
-participant identifier comes from the explicit folder mapping, not from a tube
-ID or a filename pattern.
+participant identifier comes from the folder mapping you provide. CARWatch does
+not try to derive it from a tube ID or file name.
 
 ```{r import}
 participant_folders <- list.dirs(file.path(study_dir, "logs"),
@@ -66,9 +66,9 @@ summarize_source_audit(source_audit)
 
 ## First pass: advisory conversion report
 
-The first pass records issues but does not execute its prefilled recommended
-actions. Raw logs remain unchanged. Export this table for spreadsheet review in
-a real study and preserve every context column and `issue_id`.
+The first pass lists issues but does not apply its suggested actions. The app
+logs remain unchanged. Export this table for spreadsheet review in a real study
+and retain its identifying and context columns.
 
 ```{r advisory}
 advisory <- convert_raw_logs(
@@ -110,9 +110,8 @@ final$report$issues
 
 ## Inspect and save complete results
 
-Keep `carwatch_results` complete. `as_study_days()` and
-`as_sample_events()` are inspection views; they do not replace the canonical
-wide object.
+Keep `study_results` as the complete result object. `as_study_days()` and
+`as_sample_events()` create convenient tables for inspection.
 
 ```{r inspect-save}
 study_days <- as_study_days(study_results)
@@ -124,7 +123,7 @@ head(sample_events)
 results_path <- file.path(study_dir, "study_results.csv")
 write_study_results(study_results, results_path)
 
-# Python-generated and R-generated complete CSV files use this same format.
+# The complete CSV preserves the information needed to reload the result later.
 restored <- read_study_results(results_path)
 identical(study_results, restored)
 ```

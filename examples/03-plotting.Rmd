@@ -6,13 +6,13 @@ output:
     toc_float: true
 ---
 
-This walkthrough reproduces the Python plotting notebook with R-native
-`ggplot2` objects. It builds complete Study Results, merges deterministic
-cortisol measurements, and creates the four CARWatch quality-control plots.
+This walkthrough builds complete Study Results, merges example cortisol
+measurements, and creates the four CARWatch quality-control plots.
 
 ```{r setup}
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
-library(carwatch)
+#library(carwatch)
+pkgload::load_all("..", reset = TRUE)
 
 study_dir <- file.path(tempdir(), "carwatch-r-plotting-example")
 ```
@@ -75,6 +75,7 @@ plot_compliance_overview(study_results, view = "heatmap")
 ```{r timing-deviation, fig.width=8, fig.height=5}
 plot_timing_deviation(study_results)
 ```
+
 
 ## Cortisol response
 

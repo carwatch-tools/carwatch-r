@@ -3,9 +3,10 @@ title: "Resolve conversion issues interactively"
 output: html_document
 ---
 
-The Shiny/DT editor is the R-native alternative to spreadsheet review. It
-restricts decisions by issue code and returns the validated issue table when
-`Done` is pressed.
+The Shiny/DT editor is the R-native alternative to spreadsheet review. The
+issue table is on the left and decision controls are on the right. It restricts
+decisions by issue code. **Refresh remaining issues** reruns conversion from the
+original logs, and `Done` returns the complete validated decision history.
 
 ```{r setup}
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
@@ -39,7 +40,13 @@ advisory <- suppressWarnings(convert_raw_logs(
   create_report = TRUE
 ))
 
-app <- conversion_report_editor(advisory$report, launch = FALSE)
+manual_diary <- read_manual_diary(file.path(study_dir, "manual_diary.csv"))
+app <- conversion_report_editor(
+  advisory$report,
+  raw_logs = raw_logs,
+  manual_diary = manual_diary,
+  launch = FALSE
+)
 class(app)
 ```
 
@@ -47,8 +54,11 @@ Run the following in an interactive R session. Decisions are applied only by
 the subsequent strict conversion.
 
 ```{r launch-app, eval=FALSE}
-decisions <- conversion_report_editor(advisory$report)
-manual_diary <- read_manual_diary(file.path(study_dir, "manual_diary.csv"))
+decisions <- conversion_report_editor(
+  advisory$report,
+  raw_logs = raw_logs,
+  manual_diary = manual_diary
+)
 
 study_results <- convert_raw_logs(
   raw_logs,

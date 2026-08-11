@@ -6,22 +6,22 @@ output:
     toc_float: true
 ---
 
-This walkthrough mirrors the Python cortisol-merge notebook. It generates the
-same deterministic local inputs, completes the decision-controlled conversion,
-merges position-indexed cortisol measurements, computes response features, and
-produces static plots.
+This walkthrough creates local example inputs, completes the conversion,
+merges cortisol measurements by sample position, computes response features,
+and produces static plots.
 
 ```{r setup}
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
-library(carwatch)
+#library(carwatch)
+pkgload::load_all("..", reset = TRUE)
 
 study_dir <- file.path(tempdir(), "carwatch-r-saliva-example")
 ```
 
 ## Build complete Study Results
 
-The merge and feature APIs require complete canonical results, never the
-display-only `simple = TRUE` form.
+Merging and feature calculation require the complete result object, not the
+compact display table created with `simple = TRUE`.
 
 ```{r conversion}
 generate_synthetic_study_data(
@@ -49,8 +49,8 @@ study_results <- convert_raw_logs(
 
 ## Merge laboratory data by sample position
 
-The generated cortisol file is position-indexed. Position is protocol metadata,
-not a property inferred from an opaque tube ID.
+The generated cortisol file uses sample positions. CARWatch gets these from the
+study setup; it does not try to infer them from the spelling of a tube ID.
 
 ```{r merge}
 cortisol <- readr::read_csv(

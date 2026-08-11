@@ -1,11 +1,11 @@
 # CARWatch R example gallery
 
-The gallery mirrors the focused Python example workflows with R-native APIs.
+The gallery contains short, task-focused R Markdown examples.
 Every `.Rmd` file is executable and creates its inputs below `tempdir()`.
 
 ## Research workflow
 
-1. [Load participant folders and inspect source provenance](01-research-workflow/01-load-carwatch-logs.Rmd)
+1. [Load participant folders and check imported files](01-research-workflow/01-load-carwatch-logs.Rmd)
 2. [Resolve conversion issues through a CSV report](01-research-workflow/02-resolve-conversion-issues-in-spreadsheet.Rmd)
 3. [Resolve conversion issues interactively](01-research-workflow/03-resolve-conversion-issues-interactively.Rmd)
 4. [Assess and filter sampling compliance](01-research-workflow/04-assess-and-filter-sampling-compliance.Rmd)
@@ -21,8 +21,5 @@ Every `.Rmd` file is executable and creates its inputs below `tempdir()`.
 
 - [Generate local CARWatch example data](03-example-data/01-generate-local-example-data.Rmd)
 
-Render the complete catalogue from the package root:
-
-```sh
-Rscript tools/render_examples.R
-```
+For contributors, rendering the complete catalogue is documented in
+[Development](../../docs/development.md).

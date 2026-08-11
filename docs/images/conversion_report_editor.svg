@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="720" viewBox="0 0 1440 720" role="img" aria-labelledby="title description">
+  <title id="title">CARWatch conversion report editor</title>
+  <desc id="description">Schematic view of the Shiny editor with an issue table on the left, decision controls on the right, and a refresh button above.</desc>
+  <rect width="1440" height="720" fill="#f7f8fa"/>
+  <rect x="24" y="20" width="1392" height="680" rx="8" fill="#ffffff" stroke="#d7dce2"/>
+
+  <text x="54" y="68" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#20252b">CARWatch conversion decisions</text>
+  <rect x="54" y="92" width="224" height="42" rx="5" fill="#2563a6"/>
+  <text x="76" y="119" font-family="Arial, sans-serif" font-size="16" font-weight="600" fill="#ffffff">Refresh remaining issues</text>
+  <text x="296" y="119" font-family="Arial, sans-serif" font-size="16" fill="#39424e">4 unresolved issues remain.</text>
+
+  <rect x="54" y="158" width="920" height="478" rx="5" fill="#ffffff" stroke="#cbd2da"/>
+  <rect x="54" y="158" width="920" height="52" rx="5" fill="#eef2f6"/>
+  <g font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#29313a">
+    <text x="72" y="190">Participant</text>
+    <text x="178" y="190">Day</text>
+    <text x="234" y="190">Sample</text>
+    <text x="316" y="190">Issue</text>
+    <text x="610" y="190">Proposed action</text>
+    <text x="830" y="190">Status</text>
+  </g>
+  <g stroke="#d8dde3">
+    <line x1="158" y1="158" x2="158" y2="636"/>
+    <line x1="218" y1="158" x2="218" y2="636"/>
+    <line x1="298" y1="158" x2="298" y2="636"/>
+    <line x1="592" y1="158" x2="592" y2="636"/>
+    <line x1="812" y1="158" x2="812" y2="636"/>
+    <line x1="54" y1="210" x2="974" y2="210"/>
+    <line x1="54" y1="274" x2="974" y2="274"/>
+    <line x1="54" y1="338" x2="974" y2="338"/>
+    <line x1="54" y1="402" x2="974" y2="402"/>
+    <line x1="54" y1="466" x2="974" y2="466"/>
+  </g>
+  <rect x="55" y="211" width="918" height="62" fill="#dcecff"/>
+  <g font-family="Arial, sans-serif" font-size="14" fill="#29313a">
+    <text x="72" y="248">VP_01</text><text x="178" y="248">D3</text><text x="234" y="248">S1</text>
+    <text x="316" y="239">Missing scheduled</text><text x="316" y="258">sample event</text>
+    <text x="610" y="239">Use manual-diary</text><text x="610" y="258">sampling time</text><text x="830" y="248">unresolved</text>
+
+    <text x="72" y="312">VP_01</text><text x="178" y="312">D3</text><text x="234" y="312">S2</text>
+    <text x="316" y="303">Missing scheduled</text><text x="316" y="322">sample event</text>
+    <text x="610" y="303">Use manual-diary</text><text x="610" y="322">sampling time</text><text x="830" y="312">unresolved</text>
+
+    <text x="72" y="376">VP_02</text><text x="178" y="376">D2</text><text x="234" y="376">S3</text>
+    <text x="316" y="367">Duplicate sample</text><text x="316" y="386">scans</text>
+    <text x="610" y="376">Keep earliest scan</text><text x="830" y="376">unresolved</text>
+
+    <text x="72" y="440">VP_03</text><text x="178" y="440">D1</text><text x="234" y="440">—</text>
+    <text x="316" y="431">Missing awakening</text><text x="316" y="450">time</text>
+    <text x="610" y="431">Use manual-diary</text><text x="610" y="450">awakening time</text><text x="830" y="440">unresolved</text>
+  </g>
+
+  <rect x="1000" y="158" width="386" height="478" rx="5" fill="#f5f7f9" stroke="#cbd2da"/>
+  <text x="1030" y="196" font-family="Arial, sans-serif" font-size="16" font-weight="600" fill="#29313a">Select one issue and choose a decision.</text>
+  <text x="1030" y="242" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#29313a">Decision</text>
+  <rect x="1030" y="256" width="326" height="42" rx="4" fill="#ffffff" stroke="#aeb7c2"/>
+  <text x="1045" y="282" font-family="Arial, sans-serif" font-size="15" fill="#29313a">accept</text>
+  <path d="M1334 272 l8 8 l8 -8" fill="none" stroke="#59636f" stroke-width="2"/>
+  <text x="1030" y="336" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#29313a">Decision value</text>
+  <rect x="1030" y="350" width="326" height="94" rx="4" fill="#ffffff" stroke="#aeb7c2"/>
+  <text x="1045" y="378" font-family="Arial, sans-serif" font-size="14" fill="#7a8490">Required for change or</text>
+  <text x="1045" y="399" font-family="Arial, sans-serif" font-size="14" fill="#7a8490">override_expected_sample</text>
+  <rect x="1030" y="466" width="152" height="42" rx="5" fill="#2563a6"/>
+  <text x="1054" y="493" font-family="Arial, sans-serif" font-size="15" font-weight="600" fill="#ffffff">Apply decision</text>
+  <line x1="1030" y1="536" x2="1356" y2="536" stroke="#d3d9e0"/>
+  <rect x="1030" y="560" width="82" height="40" rx="5" fill="#ffffff" stroke="#98a3af"/>
+  <text x="1052" y="585" font-family="Arial, sans-serif" font-size="15" fill="#29313a">Done</text>
+  <rect x="1126" y="560" width="86" height="40" rx="5" fill="#ffffff" stroke="#98a3af"/>
+  <text x="1146" y="585" font-family="Arial, sans-serif" font-size="15" fill="#29313a">Cancel</text>
+
+  <circle cx="75" cy="664" r="7" fill="#2563a6"/>
+  <text x="92" y="670" font-family="Arial, sans-serif" font-size="14" fill="#59636f">Selected issue</text>
+</svg>

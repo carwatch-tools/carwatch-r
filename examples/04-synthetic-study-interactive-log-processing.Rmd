@@ -6,14 +6,15 @@ output:
     toc_float: true
 ---
 
-This R-native counterpart to the Python interactive notebook creates a
-synthetic study, builds an advisory conversion report, and prepares the Shiny
-conversion editor and participant-day timeline. Rendering does not launch a
-server; run the final calls interactively to open each app.
+This walkthrough creates an example study, builds a first conversion report,
+and prepares the Shiny conversion editor and participant-day timeline.
+Rendering does not open the apps; run the final calls interactively to open
+each one.
 
 ```{r setup}
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
-library(carwatch)
+#library(carwatch)
+pkgload::load_all("..", reset = TRUE)
 
 if (!requireNamespace("shiny", quietly = TRUE) ||
     !requireNamespace("DT", quietly = TRUE)) {
@@ -46,7 +47,10 @@ manual_diary <- read_manual_diary(file.path(study_dir, "manual_diary.csv"))
 ## Prepare the conversion-report editor
 
 The first pass is advisory. Constructing an editor never modifies `raw_logs`.
-The app validates decisions with the same rules as `convert_raw_logs()`.
+The issue table is on the left and its decision controls are on the right. The
+app validates decisions with the same rules as `convert_raw_logs()`. Apply a
+decision, then select **Refresh remaining issues** to rerun conversion from the
+original events and replace the table with the unresolved queue.
 
 ```{r report-editor}
 advisory <- suppressWarnings(convert_raw_logs(
@@ -55,7 +59,12 @@ advisory <- suppressWarnings(convert_raw_logs(
   create_report = TRUE
 ))
 
-report_app <- conversion_report_editor(advisory$report, launch = FALSE)
+report_app <- conversion_report_editor(
+  advisory$report,
+  raw_logs = raw_logs,
+  manual_diary = manual_diary,
+  launch = FALSE
+)
 class(report_app)
 ```
 
@@ -63,7 +72,11 @@ In an interactive R session, launch the editor and retain the returned decision
 table:
 
 ```{r launch-editor, eval=FALSE}
-decisions <- conversion_report_editor(advisory$report)
+decisions <- conversion_report_editor(
+  advisory$report,
+  raw_logs = raw_logs,
+  manual_diary = manual_diary
+)
 write_conversion_report(decisions, file.path(study_dir, "conversion_issues.csv"))
 
 final_results <- convert_raw_logs(

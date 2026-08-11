@@ -1,5 +1,5 @@
 ---
-title: "Load participant folders and inspect source provenance"
+title: "Load participant folders and check imported files"
 output: html_document
 ---
 
@@ -39,5 +39,5 @@ source_audit
 summarize_source_audit(source_audit)
 ```
 
-Participant identifiers come from `participant_dirs`. Filenames and sample IDs
-remain opaque provenance values.
+Participant identifiers come from `participant_dirs`. File names and sample IDs
+are retained exactly as they appear in the app export.
