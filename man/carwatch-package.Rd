@@ -11,7 +11,7 @@ Import and reconstruct saliva-sampling studies recorded by the 'CARWatch' applic
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://carwatch-tools.github.io/carwatch-r}
+  \item \url{https://carwatch-tools.github.io/carwatch-r/}
   \item \url{https://github.com/carwatch-tools/carwatch-r}
   \item Report bugs at \url{https://github.com/carwatch-tools/carwatch-r/issues}
 }

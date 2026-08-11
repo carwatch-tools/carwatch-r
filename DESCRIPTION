@@ -46,7 +46,7 @@ Suggests:
     testthat (>= 3.2.0)
 VignetteBuilder: knitr
 Config/testthat/edition: 3
-URL: https://carwatch-tools.github.io/carwatch-r,
+URL: https://carwatch-tools.github.io/carwatch-r/,
     https://github.com/carwatch-tools/carwatch-r
 BugReports: https://github.com/carwatch-tools/carwatch-r/issues
 Config/roxygen2/version: 8.0.0
