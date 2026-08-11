@@ -21,6 +21,9 @@ test_that("conversion report editor exposes issue-constrained decisions", {
   )
   app <- conversion_report_editor(issues, launch = FALSE)
   expect_s3_class(app, "shiny.appobj")
+  session <- shiny::MockShinySession$new()
+  on.exit(session$close(), add = TRUE)
+  expect_no_error(app$serverFuncSource()(session$input, session$output, session))
   shiny::testServer(app$serverFuncSource(), {
     session$setInputs(issues_rows_selected = 1L)
     session$setInputs(decision = "change", decision_value = "use_default", apply = 1L)
@@ -34,4 +37,40 @@ test_that("conversion report editor exposes issue-constrained decisions", {
   write_conversion_report(issues, path)
   expect_equal(read_conversion_report(path)$issue_id, "issue-1")
   expect_error(conversion_report_editor(issues[0, ], launch = FALSE), "no issues")
+})
+
+test_that("conversion report editor refreshes unresolved issues and retains history", {
+  skip_if_not_installed("shiny"); skip_if_not_installed("DT")
+  root <- tempfile("carwatch-editor-")
+  generate_synthetic_study_data(
+    root,
+    n_participants = 1,
+    missing_awakening_time_ratio = 0.25,
+    missing_sampling_time_ratio = 0.25,
+    random_state = 42,
+    overwrite = TRUE,
+    validate = FALSE
+  )
+  folders <- list.dirs(file.path(root, "logs"), recursive = FALSE, full.names = TRUE)
+  raw_logs <- read_raw_logs_from_participant_dirs(stats::setNames(folders, basename(folders)))
+  raw_logs_before <- raw_logs
+  advisory <- suppressWarnings(convert_raw_logs(raw_logs, errors = "warn", create_report = TRUE))
+  diary <- read_manual_diary(file.path(root, "manual_diary.csv"))
+  app <- conversion_report_editor(
+    advisory$report,
+    raw_logs = raw_logs,
+    manual_diary = diary,
+    launch = FALSE
+  )
+
+  shiny::testServer(app$serverFuncSource(), {
+    expect_gt(nrow(current()), 0L)
+    expect_equal(nrow(history()), nrow(advisory$report$issues))
+    session$setInputs(refresh = 1L)
+    session$flushReact()
+    expect_equal(nrow(current()), 0L)
+    expect_equal(nrow(history()), nrow(advisory$report$issues))
+    expect_identical(refresh_status(), "No unresolved issues remain.")
+  })
+  expect_identical(raw_logs, raw_logs_before)
 })

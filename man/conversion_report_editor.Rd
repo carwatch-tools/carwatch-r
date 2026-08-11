@@ -8,7 +8,13 @@ conversion_report_editor(
   report,
   launch = interactive(),
   host = "127.0.0.1",
-  port = NULL
+  port = NULL,
+  raw_logs = NULL,
+  protocol_manifest = NULL,
+  sampling_schedule = NULL,
+  manual_diary = NULL,
+  check_compliance = TRUE,
+  compliance_checker = new_sampling_compliance_checker()
 )
 }
 \arguments{
@@ -20,13 +26,22 @@ conversion_report_editor(
 \item{host}{Host passed to \code{\link[shiny:runApp]{shiny::runApp()}}.}
 
 \item{port}{Optional port passed to \code{\link[shiny:runApp]{shiny::runApp()}}.}
+
+\item{raw_logs}{Optional immutable raw events. Required to enable refreshing
+the conversion after decisions change.}
+
+\item{protocol_manifest, sampling_schedule, manual_diary, check_compliance, compliance_checker}{Conversion settings forwarded unchanged by \verb{Refresh remaining issues}.}
 }
 \value{
 A validated issue tibble, \code{NULL} after cancellation, or a Shiny app
 object when \code{launch = FALSE}.
 }
 \description{
-The report remains immutable until the selected row passes the same
-validation used by \code{\link[=convert_raw_logs]{convert_raw_logs()}}. \code{Done} returns a validated issue
-tibble suitable for \code{issue_decisions}; \code{Cancel} returns \code{NULL}.
+The table is shown on the left and issue-specific decision controls on the
+right. The report remains immutable until the selected row passes the same
+validation used by \code{\link[=convert_raw_logs]{convert_raw_logs()}}. When \code{raw_logs} is supplied,
+\verb{Refresh remaining issues} applies the cumulative decisions to the original
+events with \code{errors = "warn"} and replaces the visible table with unresolved
+issues from the new conversion. Resolved upstream decisions remain in the
+history returned by \code{Done}.
 }
