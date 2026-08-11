@@ -10,10 +10,6 @@
 
 - This is a new submission.
 
-The local machine additionally reports that its system installation of HTML
-Tidy is not recent enough to validate the generated HTML manual. This is a
-machine-level tool note and is unrelated to package code or HTML generation.
-
 ## New submission
 
 This is the first CRAN submission of `carwatch`.
