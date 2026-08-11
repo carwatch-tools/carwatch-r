@@ -2,18 +2,20 @@
 % Please edit documentation in R/plotting.R
 \name{plot_timing_deviation}
 \alias{plot_timing_deviation}
-\title{Plot timing deviations}
+\title{Plot signed sampling-time deviations}
 \usage{
 plot_timing_deviation(data, by = "sample_position")
 }
 \arguments{
 \item{data}{Canonical results or sample events.}
 
-\item{by}{Grouping variable.}
+\item{by}{Grouping variable. Defaults to \code{sample_position}.}
 }
 \value{
 A ggplot object.
 }
 \description{
-Plot timing deviations
+Negative values indicate early collection and positive values late
+collection. Boxes summarize each group while jittered points retain every
+recorded observation.
 }

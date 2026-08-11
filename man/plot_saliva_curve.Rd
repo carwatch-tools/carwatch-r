@@ -2,7 +2,7 @@
 % Please edit documentation in R/plotting.R
 \name{plot_saliva_curve}
 \alias{plot_saliva_curve}
-\title{Plot individual or grouped saliva curves}
+\title{Plot CARWatch-aligned saliva response curves}
 \usage{
 plot_saliva_curve(
   data,
@@ -19,25 +19,28 @@ plot_saliva_curve(
 \arguments{
 \item{data}{Canonical results or sample events.}
 
-\item{value}{Saliva value column.}
+\item{value}{Non-empty name of the saliva measurement column.}
 
-\item{participant}{Optional participant filter.}
+\item{participant}{Optional exact participant filter.}
 
-\item{day}{Optional day filter.}
+\item{day}{Optional exact canonical-day filter.}
 
-\item{group_by}{Reserved grouping option.}
+\item{group_by}{Optional character vector defining separate aggregate curves.}
 
-\item{ci}{Reserved confidence level.}
+\item{ci}{Bootstrap confidence level between 0 and 100, or \code{NULL} for no band.}
 
-\item{n_boot}{Reserved bootstrap count.}
+\item{n_boot}{Positive number of bootstrap resamples.}
 
-\item{seed}{Reserved random seed.}
+\item{seed}{Integer random seed, or \code{NULL} to use the current R RNG state.}
 
-\item{show_individual}{Whether individual curves are drawn.}
+\item{show_individual}{Whether individual participant-day curves are drawn.}
 }
 \value{
 A ggplot object.
 }
 \description{
-Plot individual or grouped saliva curves
+Actual \code{time_min} values define the horizontal axis. Faint lines show
+participant-day curves. Thick lines connect group means calculated
+separately at each registered \code{sample_position}; shaded ribbons show BCa
+bootstrap confidence intervals when at least two measurements contribute.
 }

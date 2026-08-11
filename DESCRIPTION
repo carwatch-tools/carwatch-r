@@ -15,11 +15,13 @@ Roxygen: list(markdown = TRUE)
 Depends:
     R (>= 4.3)
 Imports:
+    boot,
     clock (>= 0.7.0),
     digest (>= 0.6.0),
     dplyr (>= 1.1.0),
     fs (>= 1.6.0),
     ggplot2 (>= 3.5.0),
+    grid,
     jsonlite (>= 1.8.0),
     readr (>= 2.1.0),
     rlang (>= 1.1.0),

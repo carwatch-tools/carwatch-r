@@ -19,5 +19,10 @@ plot_sampling_timeline(data, participant, day, show_expected = TRUE)
 A ggplot object.
 }
 \description{
-Plot an individual sampling timeline
+Actual sampling events are coloured by compliance and shaped by timestamp
+provenance. When \code{show_expected = TRUE}, hollow grey circles show the static
+protocol targets, hollow blue diamonds show targets updated from preceding
+recorded relative samples, and arrows show the signed deviation from the
+app-updated target. Missing relative scans break the adaptive target chain.
+Missing events and scheduled/recorded sample mismatches remain visible.
 }
