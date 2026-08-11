@@ -11,8 +11,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
-        r: ['4.3', 'release']
+        include:
+          - os: macos-latest
+            r: '4.3'
+          - os: macos-latest
+            r: 'release'
+          - os: ubuntu-latest
+            r: '4.3'
+          - os: ubuntu-latest
+            r: 'release'
+          - os: ubuntu-latest
+            r: 'devel'
+          - os: windows-latest
+            r: '4.3'
+          - os: windows-latest
+            r: 'release'
     steps:
       - uses: actions/checkout@v4
       - uses: r-lib/actions/setup-r@v2
