@@ -26,15 +26,17 @@ or \code{NULL} for the four-day CAR default.}
 \item{n_participants}{Number of generated participants. When \code{NULL}, use the
 configured value or the Study Manager default of 80.}
 
-\item{non_compliant_sample_ratio}{Proportion of observed samples with timing
-deliberately outside the default compliance tolerance.}
+\item{non_compliant_sample_ratio}{Proportion of expected samples with timing
+deliberately outside the default compliance tolerance. Relative and fixed
+clock-time samples use their respective tolerance-aware deviation ranges.}
 
 \item{missing_awakening_time_ratio}{Proportion of participant-days with a
 missing awakening event and first sample.}
 
 \item{missing_sampling_time_ratio}{Total proportion of expected scans omitted.}
 
-\item{random_state}{Integer seed, or \code{NULL} for unseeded generation.}
+\item{random_state}{Integer seed, or \code{NULL} for unseeded generation. Separate
+deterministic streams are used for timings, anomaly selection, and cortisol.}
 
 \item{create_cortisol_data}{Whether to create position-indexed \code{cortisol.csv}.}
 
