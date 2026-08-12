@@ -18,3 +18,8 @@ The package reads only files supplied explicitly by the user. Examples and
 tests use bundled or temporary data and do not write to the user's home
 directory. Interactive Shiny components are optional and are never started by
 examples or package checks.
+
+The words flagged by the spell checker are intentional:
+
+- "CARWatch" is the name of the software.
+- "et al." is part of the bibliographic citation.
