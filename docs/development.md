@@ -57,3 +57,36 @@ The inventory gate maps the reference tests to R contract suites.
 CI checks R 4.3 and the current R release on Linux, macOS, and Windows. It
 runs package checks, tests, coverage, fixture validation, pkgdown, and Shiny
 smoke tests.
+
+## Release workflow
+
+The `Release` GitHub Actions workflow separates CRAN preparation from the
+public GitHub release.
+
+Before submitting a version:
+
+1. Set the same release version in `DESCRIPTION` and `CITATION.cff`.
+2. Start `NEWS.md` with `# carwatch <version>` and update
+   `cran-comments.md`.
+3. Push the changes to `main` and wait for the normal package checks.
+4. In GitHub, open **Actions > Release > Run workflow**. The workflow checks
+   the package on macOS, Linux, and Windows, then provides
+   `carwatch-source-package` as a downloadable source archive.
+5. Upload that `.tar.gz` archive to win-builder and then to CRAN. CRAN still
+   requires the maintainer to confirm the submission by email.
+
+After CRAN accepts the version, create and push its tag:
+
+```sh
+git tag -a v1.0.0 -m "carwatch 1.0.0"
+git push origin v1.0.0
+```
+
+Replace `1.0.0` with the version in `DESCRIPTION`. A tag must be exactly
+`v<version>`. Pushing it reruns the release checks, builds the source archive,
+creates the GitHub Release, and attaches the archive. If any check fails, no
+GitHub Release is published.
+
+CRAN submission itself is intentionally not performed by the workflow. It is
+a reviewed submission with an email-confirmation step, whereas the GitHub
+release can be reproduced safely from the accepted tag.
