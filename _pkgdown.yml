@@ -1,6 +1,20 @@
 url: https://carwatch-tools.github.io/carwatch-r/
 template:
   bootstrap: 5
+articles:
+  - title: Tutorials
+    navbar: Tutorials
+    contents:
+      - tutorials
+      - getting-started
+      - saliva-analysis
+  - title: Development
+    navbar: Development
+    contents:
+      - development
+redirects:
+  - [docs/tutorials.html, articles/tutorials.html]
+  - [docs/development.html, articles/development.html]
 reference:
   - title: Data import and conversion
     contents:

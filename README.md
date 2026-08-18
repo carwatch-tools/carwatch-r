@@ -26,7 +26,8 @@ The features include:
 
 The [examples directory](examples/) contains four end-to-end R Markdown
 walkthroughs and nine focused gallery workflows. Start with
-[the tutorial guide](docs/tutorials.md) to choose and run a tutorial.
+[the tutorial guide](https://carwatch-tools.github.io/carwatch-r/articles/tutorials.html)
+to choose and run a tutorial.
 The [package website](https://carwatch-tools.github.io/carwatch-r) provides the
 installed-package tutorials and a searchable reference for every public
 function.
@@ -65,10 +66,10 @@ install.packages(c("pkgload", "rmarkdown", "shiny", "DT"))
 To run the supplied tutorials, download or clone this repository, open
 `examples/examples.Rproj` in RStudio, and open an `.Rmd` file in the
 `examples` folder. Use **Run All** to execute it step by step, or **Knit** to
-create an HTML report. The [tutorial guide](docs/tutorials.md) explains which
-file to start with. The tutorials load the code from this checkout, so after a
-package-code change you can rerun the setup chunk; you do not need to reinstall
-the package for every edit.
+create an HTML report. The [tutorial guide](https://carwatch-tools.github.io/carwatch-r/articles/tutorials.html)
+explains which file to start with. The tutorials load the code from this
+checkout, so after a package-code change you can rerun the setup chunk; you do
+not need to reinstall the package for every edit.
 
 ## Typical workflow
 
