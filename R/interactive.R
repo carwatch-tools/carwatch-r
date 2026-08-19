@@ -4,9 +4,16 @@
 }
 
 .editor_decisions <- function(code) {
-  decisions <- c("accept", "keep", "drop_sample", "drop_day", "drop_participant")
-  if (identical(code, "expected_sample_not_in_active_metadata")) decisions <- c(decisions, "override_expected_sample")
-  if (code %in% c("multiple_collection_dates", "possible_reregistration", "non_increasing_sampling_times", "missing_awakening_time", "missing_scheduled_sample_event")) decisions <- c(decisions, "change")
+  decisions <- c(
+    "Leave unresolved" = "",
+    "Accept proposed action" = "accept",
+    "Keep current reconstruction" = "keep",
+    "Drop sample" = "drop_sample",
+    "Drop day" = "drop_day",
+    "Drop participant" = "drop_participant"
+  )
+  if (identical(code, "expected_sample_not_in_active_metadata")) decisions <- c(decisions, "Override expected sample" = "override_expected_sample")
+  if (code %in% c("multiple_collection_dates", "possible_reregistration", "non_increasing_sampling_times", "missing_awakening_time", "missing_scheduled_sample_event")) decisions <- c(decisions, "Choose another action" = "change")
   decisions
 }
 
@@ -26,6 +33,123 @@
   merged <- dplyr::bind_rows(.normalize_issue_decisions(history), .normalize_issue_decisions(refreshed))
   merged <- merged[!duplicated(merged$issue_id, fromLast = TRUE), , drop = FALSE]
   .normalize_issue_decisions(merged)
+}
+
+.editor_effective_action <- function(issue) {
+  decision <- as.character(issue$user_decision[[1]])
+  proposed <- if ("proposed_action" %in% names(issue)) as.character(issue$proposed_action[[1]]) else ""
+  value <- if ("user_decision_value" %in% names(issue)) as.character(issue$user_decision_value[[1]]) else ""
+  if (is.na(proposed)) proposed <- ""
+  if (is.na(value)) value <- ""
+  if (identical(decision, "accept")) return(proposed)
+  if (identical(decision, "change")) return(value)
+  decision
+}
+
+.editor_scope_key <- function(...) {
+  values <- vapply(list(...), function(value) if (length(value) && !is.na(value[[1]])) as.character(value[[1]]) else "", character(1))
+  paste(values, collapse = "\r")
+}
+
+.clear_editor_decisions <- function(issues, issue_ids) {
+  frame <- .normalize_issue_decisions(issues)
+  selected <- frame$issue_id %in% issue_ids
+  frame$user_decision[selected] <- ""
+  frame$user_decision_value[selected] <- ""
+  .normalize_issue_decisions(frame)
+}
+
+.preserve_editor_unresolved_decisions <- function(history, refreshed) {
+  previous <- .normalize_issue_decisions(history)
+  current <- .normalize_issue_decisions(refreshed)
+  if (!"resolution_status" %in% names(current)) return(current)
+  previous_rows <- match(current$issue_id, previous$issue_id)
+  selected <- current$resolution_status == "unresolved" & !is.na(previous_rows)
+  current$user_decision[selected] <- previous$user_decision[previous_rows[selected]]
+  current$user_decision_value[selected] <- previous$user_decision_value[previous_rows[selected]]
+  .normalize_issue_decisions(current)
+}
+
+.defer_unavailable_diary_decisions <- function(issues, manual_diary, timezone) {
+  frame <- .normalize_issue_decisions(issues)
+  selected <- nzchar(frame$user_decision)
+  proposed <- if ("proposed_action" %in% names(frame)) as.character(frame$proposed_action) else rep("", nrow(frame))
+  proposed[is.na(proposed)] <- ""
+  dropped_participants <- frame$participant[selected & frame$user_decision == "drop_participant"]
+  dropped_days <- vapply(
+    which(selected & (frame$user_decision == "drop_day" | (frame$user_decision == "accept" & proposed == "drop_day"))),
+    function(index) .editor_scope_key(frame$participant[[index]], frame$day[[index]]),
+    character(1)
+  )
+  dropped_samples <- vapply(
+    which(selected & frame$user_decision == "drop_sample"),
+    function(index) .editor_scope_key(frame$participant[[index]], frame$day[[index]], frame$sample_id[[index]]),
+    character(1)
+  )
+  deferred <- list()
+  for (index in which(selected)) {
+    issue <- frame[index, , drop = FALSE]
+    action <- .editor_effective_action(issue)
+    if (!action %in% c("use_manual_diary_sampling_time", "use_manual_diary_awakening_time")) next
+    participant <- as.character(issue$participant[[1]])
+    day <- as.character(issue$day[[1]])
+    sample_id <- if ("sample_id" %in% names(issue)) as.character(issue$sample_id[[1]]) else NA_character_
+    if (
+      participant %in% dropped_participants ||
+      .editor_scope_key(participant, day) %in% dropped_days ||
+      .editor_scope_key(participant, day, sample_id) %in% dropped_samples
+    ) next
+    column <- if (identical(action, "use_manual_diary_awakening_time")) {
+      "awakening_time"
+    } else {
+      position <- if ("sample_position" %in% names(issue)) issue$sample_position[[1]] else NA_integer_
+      if (is.na(position)) next
+      paste0("sampling_time_", as.integer(position))
+    }
+    error <- tryCatch({
+      .manual_timestamp(manual_diary, participant, day, column, timezone)
+      NULL
+    }, error = identity)
+    if (!is.null(error)) deferred[[as.character(issue$issue_id[[1]])]] <- error
+  }
+  list(decisions = .clear_editor_decisions(frame, names(deferred)), errors = deferred)
+}
+
+.refresh_editor_issues <- function(raw_logs, history, protocol_manifest, sampling_schedule, manual_diary, check_compliance, compliance_checker, convert = convert_raw_logs) {
+  decisions <- .normalize_issue_decisions(history)
+  timezone <- attr(raw_logs$timestamp, "tzone") %||% "Europe/Berlin"
+  deferred <- .defer_unavailable_diary_decisions(decisions, manual_diary, timezone)
+  refreshed <- suppressWarnings(convert(
+    raw_logs,
+    protocol_manifest = protocol_manifest,
+    errors = "warn",
+    create_report = TRUE,
+    issue_decisions = deferred$decisions,
+    sampling_schedule = sampling_schedule,
+    manual_diary = manual_diary,
+    check_compliance = check_compliance,
+    compliance_checker = compliance_checker
+  ))
+  refreshed_issues <- .editor_issue_frame(refreshed$report)
+  updated_history <- .clear_editor_decisions(history, names(deferred$errors))
+  refreshed_issues <- .preserve_editor_unresolved_decisions(updated_history, refreshed_issues)
+  merged_history <- .merge_editor_history(updated_history, refreshed_issues)
+  list(
+    history = merged_history,
+    remaining = .editor_unresolved_issues(refreshed_issues),
+    deferred_errors = deferred$errors
+  )
+}
+
+.editor_issue_datatable <- function(issues, display_columns) {
+  DT::datatable(
+    issues[display_columns],
+    selection = "single",
+    rownames = FALSE,
+    extensions = "KeyTable",
+    options = list(pageLength = 12, scrollX = TRUE, keys = TRUE),
+    callback = DT::JS("table.on('key-focus.dt', function(e, datatable, cell) { $(cell.node()).closest('tr').trigger('click'); });")
+  )
 }
 
 #' Write an editable conversion report
@@ -94,8 +218,10 @@ interactive_sampling_timeline <- function(data, show_expected = TRUE, launch = i
 #' validation used by [convert_raw_logs()]. When `raw_logs` is supplied,
 #' `Refresh remaining issues` applies the cumulative decisions to the original
 #' events with `errors = "warn"` and replaces the visible table with unresolved
-#' issues from the new conversion. Resolved upstream decisions remain in the
-#' history returned by `Done`.
+#' issues from the new conversion. A diary-backed decision that cannot be
+#' applied is reset to `Leave unresolved` while successfully applied decisions
+#' are hidden. Resolved upstream decisions remain in the history returned by
+#' `Done`. Mouse and arrow-key row selection both update the decision controls.
 #'
 #' @param report A conversion report list or its editable issue table.
 #' @param launch Run the Shiny gadget immediately. Set `FALSE` to return a
@@ -143,7 +269,7 @@ conversion_report_editor <- function(report, launch = interactive(), host = "127
     current <- shiny::reactiveVal(unresolved)
     refresh_status <- shiny::reactiveVal(sprintf("%d unresolved issue%s.", nrow(unresolved), if (nrow(unresolved) == 1L) "" else "s"))
     output$refresh_status <- shiny::renderText(refresh_status())
-    output$issues <- DT::renderDT(DT::datatable(current()[display_columns], selection = "single", rownames = FALSE, options = list(pageLength = 12, scrollX = TRUE)))
+    output$issues <- DT::renderDT(.editor_issue_datatable(current(), display_columns))
     shiny::observeEvent(input$issues_rows_selected, {
       row <- input$issues_rows_selected
       if (!length(row)) return()
@@ -167,34 +293,41 @@ conversion_report_editor <- function(report, launch = interactive(), host = "127
         shiny::showNotification("Refresh requires `raw_logs`.", type = "error", duration = NULL)
         return()
       }
-      decisions <- tryCatch(.normalize_issue_decisions(history()), error = identity)
-      if (inherits(decisions, "error")) { shiny::showNotification(conditionMessage(decisions), type = "error", duration = NULL); return() }
-      refreshed <- tryCatch(
-        suppressWarnings(convert_raw_logs(
+      shiny::updateActionButton(session, "refresh", disabled = TRUE)
+      refresh_status("Refreshing remaining issues...")
+      on.exit(shiny::updateActionButton(session, "refresh", disabled = FALSE), add = TRUE)
+      result <- tryCatch(
+        .refresh_editor_issues(
           raw_logs,
-          protocol_manifest = protocol_manifest,
-          errors = "warn",
-          create_report = TRUE,
-          issue_decisions = decisions,
-          sampling_schedule = sampling_schedule,
-          manual_diary = manual_diary,
-          check_compliance = check_compliance,
-          compliance_checker = compliance_checker
-        )),
+          history(),
+          protocol_manifest,
+          sampling_schedule,
+          manual_diary,
+          check_compliance,
+          compliance_checker
+        ),
         error = identity
       )
-      if (inherits(refreshed, "error")) {
-        refresh_status(paste("Refresh failed:", conditionMessage(refreshed)))
-        shiny::showNotification(conditionMessage(refreshed), type = "error", duration = NULL)
+      if (inherits(result, "error")) {
+        refresh_status(paste("Refresh failed:", conditionMessage(result)))
+        shiny::showNotification(conditionMessage(result), type = "error", duration = NULL)
         return()
       }
-      refreshed_issues <- .editor_issue_frame(refreshed$report)
-      history(.merge_editor_history(history(), refreshed_issues))
-      remaining <- .editor_unresolved_issues(refreshed_issues)
+      history(result$history)
+      remaining <- result$remaining
       current(remaining)
       refresh_status(if (nrow(remaining)) sprintf("%d unresolved issue%s remain.", nrow(remaining), if (nrow(remaining) == 1L) "" else "s") else "No unresolved issues remain.")
+      if (length(result$deferred_errors)) {
+        shiny::showNotification(
+          sprintf("%d diary-backed decision%s could not be applied and remain%s unresolved.", length(result$deferred_errors), if (length(result$deferred_errors) == 1L) "" else "s", if (length(result$deferred_errors) == 1L) "s" else ""),
+          type = "warning",
+          duration = NULL
+        )
+      }
       if (nrow(remaining)) {
-        session$onFlushed(function() DT::selectRows(DT::dataTableProxy("issues", session = session), 1L), once = TRUE)
+        deferred_rows <- match(names(result$deferred_errors), remaining$issue_id, nomatch = 0L)
+        selected_row <- if (any(deferred_rows > 0L)) deferred_rows[deferred_rows > 0L][[1]] else 1L
+        session$onFlushed(function() DT::selectRows(DT::dataTableProxy("issues", session = session), selected_row), once = TRUE)
       }
     })
     shiny::observeEvent(input$done, {

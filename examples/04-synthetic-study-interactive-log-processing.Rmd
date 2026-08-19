@@ -50,7 +50,9 @@ The first pass is advisory. Constructing an editor never modifies `raw_logs`.
 The issue table is on the left and its decision controls are on the right. The
 app validates decisions with the same rules as `convert_raw_logs()`. Apply a
 decision, then select **Refresh remaining issues** to rerun conversion from the
-original events and replace the table with the unresolved queue.
+original events and replace the table with the unresolved queue. A diary-backed
+decision that cannot be applied is reset to **Leave unresolved** while other
+successfully applied decisions are hidden.
 
 ```{r report-editor}
 advisory <- suppressWarnings(convert_raw_logs(

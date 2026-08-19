@@ -277,12 +277,14 @@ write_conversion_report(decisions, "conversion_issues.csv")
 ~~~
 
 The editor displays the issue table on the left and the available decisions on
-the right. Select an issue, choose a decision, and press **Apply decision**.
-Then press **Refresh remaining issues** to rerun the conversion with all
-decisions made so far and show only the issues that still need attention.
-Press **Done** when the review is complete; the editor then returns the full
-`decisions` table. Saving that table is recommended so the review can be
-reproduced later.
+the right. Select rows with the mouse or arrow keys, choose a decision, and
+press **Apply decision**. Then press **Refresh remaining issues** to rerun the
+conversion with all decisions made so far and show only the issues that still
+need attention. If a diary-backed decision cannot be applied, that issue is
+reset to **Leave unresolved** and remains visible while successfully applied
+decisions are hidden. Press **Done** when the review is complete; the editor
+then returns the full `decisions` table. Saving that table is recommended so
+the review can be reproduced later.
 
 The editor offers only decisions that are valid for the selected issue:
 

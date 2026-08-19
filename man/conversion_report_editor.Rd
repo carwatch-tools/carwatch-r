@@ -42,6 +42,8 @@ right. The report remains immutable until the selected row passes the same
 validation used by \code{\link[=convert_raw_logs]{convert_raw_logs()}}. When \code{raw_logs} is supplied,
 \verb{Refresh remaining issues} applies the cumulative decisions to the original
 events with \code{errors = "warn"} and replaces the visible table with unresolved
-issues from the new conversion. Resolved upstream decisions remain in the
-history returned by \code{Done}.
+issues from the new conversion. A diary-backed decision that cannot be
+applied is reset to \verb{Leave unresolved} while successfully applied decisions
+are hidden. Resolved upstream decisions remain in the history returned by
+\code{Done}. Mouse and arrow-key row selection both update the decision controls.
 }

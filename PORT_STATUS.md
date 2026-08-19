@@ -22,7 +22,8 @@ types.
   static quality-control plots.
 - Registration-aware synthetic studies and configurable anomalies.
 - Interactive participant/day timelines and conversion-report decisions through
-  optional Shiny and DT components.
+  optional Shiny and DT components, including keyboard row navigation and
+  refreshes that isolate unavailable manual-diary decisions.
 
 ## R-native representations
 

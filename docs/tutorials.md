@@ -64,5 +64,7 @@ final analysis was created.
 The rendered documents prepare the Shiny apps but do not open them
 automatically. Run the explicitly marked launch chunk in an interactive R
 session to open the timeline or conversion-decision editor. In the editor,
-select an issue, apply a decision, then use **Refresh remaining issues** to
-update the conversion. `Done` returns the complete decision table.
+select an issue with the mouse or arrow keys, apply a decision, then use
+**Refresh remaining issues** to update the conversion. Diary-backed decisions
+that cannot be applied are reset to **Leave unresolved** while successful
+decisions are hidden. `Done` returns the complete decision table.
