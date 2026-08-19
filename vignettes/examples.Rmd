@@ -1,0 +1,47 @@
+---
+title: "CARWatch examples"
+description: "Executable end-to-end walkthroughs and focused R Markdown examples for CARWatch."
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{CARWatch examples}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+This catalogue lists the executable R Markdown examples in the
+[carwatch-r repository](https://github.com/carwatch-tools/carwatch-r/tree/main/examples).
+Each example creates its inputs below `tempdir()` unless it explicitly asks
+for an interactive action.
+
+To run an example locally, clone or download the repository, open
+`examples/examples.Rproj` in RStudio, and open the linked `.Rmd` file. Use
+**Run All** to work through it step by step or **Knit** to create an HTML
+report. Install `pkgload`, `rmarkdown`, `shiny`, and `DT` as described in the
+[tutorial guide](tutorials.html).
+
+## End-to-end walkthroughs
+
+| If you want to… | Start here |
+| --- | --- |
+| Import app logs, review issues, submit decisions, and save Study Results | [`01-log-processing.Rmd`](https://github.com/carwatch-tools/carwatch-r/blob/main/examples/01-log-processing.Rmd) |
+| Merge cortisol data, assess compliance, and compute response features | [`02-saliva-analysis.Rmd`](https://github.com/carwatch-tools/carwatch-r/blob/main/examples/02-saliva-analysis.Rmd) |
+| Create sampling timelines, compliance, deviation, and saliva-response plots | [`03-plotting.Rmd`](https://github.com/carwatch-tools/carwatch-r/blob/main/examples/03-plotting.Rmd) |
+| Generate synthetic data and try the Shiny tools | [`04-synthetic-study-interactive-log-processing.Rmd`](https://github.com/carwatch-tools/carwatch-r/blob/main/examples/04-synthetic-study-interactive-log-processing.Rmd) |
+
+## Focused research workflows
+
+1. [Load participant folders and check imported files](https://github.com/carwatch-tools/carwatch-r/blob/main/examples/gallery/01-research-workflow/01-load-carwatch-logs.Rmd)
+2. [Resolve conversion issues through a CSV report](https://github.com/carwatch-tools/carwatch-r/blob/main/examples/gallery/01-research-workflow/02-resolve-conversion-issues-in-spreadsheet.Rmd)
+3. [Resolve conversion issues interactively](https://github.com/carwatch-tools/carwatch-r/blob/main/examples/gallery/01-research-workflow/03-resolve-conversion-issues-interactively.Rmd)
+4. [Assess and filter sampling compliance](https://github.com/carwatch-tools/carwatch-r/blob/main/examples/gallery/01-research-workflow/04-assess-and-filter-sampling-compliance.Rmd)
+5. [Inspect individual sampling timing](https://github.com/carwatch-tools/carwatch-r/blob/main/examples/gallery/01-research-workflow/05-inspect-individual-sampling-timing.Rmd)
+6. [Merge positional saliva measurements](https://github.com/carwatch-tools/carwatch-r/blob/main/examples/gallery/01-research-workflow/06-merge-saliva-measurements.Rmd)
+7. [Compute cortisol response features](https://github.com/carwatch-tools/carwatch-r/blob/main/examples/gallery/01-research-workflow/07-compute-cortisol-features.Rmd)
+
+## Protocol variants and example data
+
+- [Reconstruct a multi-registration protocol](https://github.com/carwatch-tools/carwatch-r/blob/main/examples/gallery/02-protocol-variants/01-reconstruct-multi-registration-protocol.Rmd)
+- [Generate local CARWatch example data](https://github.com/carwatch-tools/carwatch-r/blob/main/examples/gallery/03-example-data/01-generate-local-example-data.Rmd)
+
+The examples are rendered and smoke-tested in continuous integration. The
+developer workflow is documented in [Development](development.html).

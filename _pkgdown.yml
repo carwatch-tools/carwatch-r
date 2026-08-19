@@ -8,6 +8,10 @@ articles:
       - tutorials
       - getting-started
       - saliva-analysis
+  - title: Examples
+    navbar: Examples
+    contents:
+      - examples
   - title: Development
     navbar: Development
     contents:
@@ -15,6 +19,8 @@ articles:
 redirects:
   - [docs/tutorials.html, articles/tutorials.html]
   - [docs/development.html, articles/development.html]
+  - [examples/index.html, articles/examples.html]
+  - [examples/gallery/index.html, articles/examples.html]
 reference:
   - title: Data import and conversion
     contents:

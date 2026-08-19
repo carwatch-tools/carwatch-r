@@ -50,10 +50,9 @@ code, rerun the setup chunk before rerunning the affected tutorial chunks.
 | Create sampling timelines, compliance, deviation, and saliva-response plots | [`03-plotting.Rmd`](https://github.com/carwatch-tools/carwatch-r/blob/main/examples/03-plotting.Rmd) |
 | Generate synthetic data and try the Shiny tools | [`04-synthetic-study-interactive-log-processing.Rmd`](https://github.com/carwatch-tools/carwatch-r/blob/main/examples/04-synthetic-study-interactive-log-processing.Rmd) |
 
-The [focused gallery](https://github.com/carwatch-tools/carwatch-r/tree/main/examples/gallery)
-contains shorter examples for one task at a time, including spreadsheet-based
-issue review, multi-registration protocols, saliva merging, and feature
-calculation.
+The [complete examples catalogue](examples.html) lists the four end-to-end
+walkthroughs and the focused gallery, including spreadsheet-based issue review,
+multi-registration protocols, saliva merging, and feature calculation.
 
 ## Use your own study data
 

@@ -27,7 +27,8 @@ The features include:
 The [examples directory](examples/) contains four end-to-end R Markdown
 walkthroughs and nine focused gallery workflows. Start with
 [the tutorial guide](https://carwatch-tools.github.io/carwatch-r/articles/tutorials.html)
-to choose and run a tutorial.
+to choose and run a tutorial; the [published examples catalogue](https://carwatch-tools.github.io/carwatch-r/articles/examples.html)
+lists the complete set.
 The [package website](https://carwatch-tools.github.io/carwatch-r) provides the
 installed-package tutorials and a searchable reference for every public
 function.
