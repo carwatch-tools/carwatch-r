@@ -79,8 +79,42 @@ Before submitting a version:
 4. In GitHub, open **Actions > Release > Run workflow**. The workflow checks
    the package on macOS, Linux, and Windows, then provides
    `carwatch-source-package` as a downloadable source archive.
-5. Upload that `.tar.gz` archive to win-builder and then to CRAN. CRAN still
-   requires the maintainer to confirm the submission by email.
+5. Either upload that `.tar.gz` archive to win-builder and CRAN manually, or
+   use the command-line submission below. CRAN still requires the maintainer
+   to confirm the submission by email.
+
+### Command-line CRAN submission
+
+The command-line route uses `devtools` after the local and GitHub checks have
+passed. Start an interactive R session from the package root:
+
+```sh
+R --quiet
+```
+
+Submit the current package source to win-builder's R-devel environment:
+
+```r
+devtools::check_win_devel(webform = TRUE)
+```
+
+Wait for the result sent to the maintainer email in `DESCRIPTION`. After that
+check passes, submit the package to CRAN from the same unchanged checkout:
+
+```r
+devtools::submit_cran()
+```
+
+`submit_cran()` builds a fresh source archive, reads the maintainer details
+from `DESCRIPTION` and the submission text from `cran-comments.md`, and uploads
+both through CRAN's submission form. It does not run the release checks and it
+does not upload the archive produced by GitHub Actions. The function requires
+an interactive R session; it cannot be run with `Rscript -e`.
+
+After a successful upload, confirm the email from CRAN. `submit_cran()` also
+creates a temporary `CRAN-SUBMISSION` file recording the submitted version,
+commit, and time. Leave this file uncommitted until CRAN accepts the release.
+Do not use `devtools::release()`; it is deprecated.
 
 After CRAN accepts the version, create and push its tag:
 

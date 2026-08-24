@@ -1,5 +1,5 @@
 Package: carwatch
-Title: Registration-Aware Processing of CARWatch Sampling Logs and Saliva Data
+Title: Processing of 'CARWatch' Sampling Logs and Saliva Data
 Version: 1.0.1
 Authors@R: 
     person(

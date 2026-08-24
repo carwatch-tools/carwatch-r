@@ -3,7 +3,9 @@
 This is a resubmission. In this version I have:
 
 - replaced the permanently redirected RStudio Desktop URL in the README and
-  tutorial vignette with the current Posit documentation URL.
+  tutorial vignette with the current Posit documentation URL;
+- enclosed the software name 'CARWatch' in single quotes in the `DESCRIPTION`
+  title as requested.
 
 ## Test environments
 
