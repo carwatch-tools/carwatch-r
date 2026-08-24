@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If you use CARWatch in scientific work, please cite the software and the associated article."
 type: software
 title: "CARWatch for R"
-version: 1.0.0
-date-released: 2026-08-09
+version: 1.0.1
+date-released: 2026-08-24
 authors:
   - family-names: Richer
     given-names: Robert

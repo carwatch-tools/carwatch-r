@@ -78,11 +78,11 @@ Before submitting a version:
 After CRAN accepts the version, create and push its tag:
 
 ```sh
-git tag -a v1.0.0 -m "carwatch 1.0.0"
-git push origin v1.0.0
+git tag -a v1.0.1 -m "carwatch 1.0.1"
+git push origin v1.0.1
 ```
 
-Replace `1.0.0` with the version in `DESCRIPTION`. A tag must be exactly
+Replace `1.0.1` with the version in `DESCRIPTION`. A tag must be exactly
 `v<version>`. Pushing it reruns the release checks, builds the source archive,
 creates the GitHub Release, and attaches the archive. If any check fails, no
 GitHub Release is published.

@@ -1,3 +1,8 @@
+# carwatch 1.0.1
+
+- Replaced the permanently redirected RStudio Desktop URL in the installation
+  instructions and tutorial vignette.
+
 # carwatch 1.0.0
 
 - Completed the native R migration of `carwatch-python` 1.0.0.

@@ -17,3 +17,4 @@
 ^tools/generate_python_fixtures\.py$
 ^tools/generate_readme_figures\.R$
 ^tools/check_release_metadata\.R$
+^CRAN-SUBMISSION$

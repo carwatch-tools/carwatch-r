@@ -39,7 +39,7 @@ function.
 CARWatch requires R 4.3 or newer and is easiest to use in RStudio.
 
 1. Install [R](https://cran.r-project.org/).
-2. Install [RStudio Desktop](https://posit.co/download/rstudio-desktop/).
+2. Install [RStudio Desktop](https://docs.posit.co/ide/user/#rstudio-ide-oss-downloads).
 3. Start RStudio. RStudio is the application you use to write and run R code;
    it needs R to be installed first.
 

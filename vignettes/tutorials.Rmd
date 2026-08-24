@@ -19,7 +19,7 @@ runs CARWatch; RStudio is the desktop application used to edit, run, and render
 the tutorials. Install R first, then RStudio:
 
 1. Download [R](https://cran.r-project.org/).
-2. Download [RStudio Desktop](https://posit.co/download/rstudio-desktop/).
+2. Download [RStudio Desktop](https://docs.posit.co/ide/user/#rstudio-ide-oss-downloads).
 3. Start RStudio and paste the following into its Console:
 
 ```r
