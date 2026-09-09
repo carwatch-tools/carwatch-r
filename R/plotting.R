@@ -328,13 +328,7 @@ plot_compliance_overview <- function(data, by = "sample_position", view = c("pro
     round(bounds, 6L)
   }
   if (is.null(seed)) return(calculate())
-  had_seed <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
-  if (had_seed) previous_seed <- get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
-  on.exit({
-    if (had_seed) assign(".Random.seed", previous_seed, envir = .GlobalEnv) else if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) rm(".Random.seed", envir = .GlobalEnv)
-  }, add = TRUE)
-  set.seed(seed)
-  calculate()
+  withr::with_seed(seed, calculate())
 }
 
 .summarize_saliva_curve <- function(samples, value, groups, ci, n_boot, seed) {

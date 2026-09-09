@@ -33,7 +33,8 @@ Imports:
     readr (>= 2.1.0),
     rlang (>= 1.1.0),
     tibble (>= 3.2.0),
-    vctrs (>= 0.6.0)
+    vctrs (>= 0.6.0),
+    withr (>= 3.0.0)
 Suggests:
     covr,
     DT,
