@@ -156,8 +156,8 @@
 
 .synthetic_select <- function(values, size, seed) {
   if (!size) return(character())
-  if (!is.null(seed)) set.seed(seed)
-  sample(values, size, replace = FALSE)
+  if (is.null(seed)) return(sample(values, size, replace = FALSE))
+  withr::with_seed(seed, sample(values, size, replace = FALSE))
 }
 
 .synthetic_signed_deviation <- function(non_compliant, absolute, relative_interval = NULL, first_relative = FALSE) {
@@ -186,8 +186,8 @@
 
 .write_synthetic_cortisol <- function(path, config, participants, days, profile, random_state) {
   seed <- .synthetic_seed(random_state, 30L)
-  if (!is.null(seed)) set.seed(seed)
-  baselines <- stats::setNames(stats::rlnorm(length(participants), log(12), 0.28), participants)
+  generate <- function() {
+    baselines <- stats::setNames(stats::rlnorm(length(participants), log(12), 0.28), participants)
   rows <- list()
   for (day_config in days) {
     registration <- config$registrations[[day_config$registration]]
@@ -199,7 +199,9 @@
       rows[[length(rows) + 1L]] <- tibble::tibble(participant = participant, day = day_config$day, sample_position = position, cortisol = round(max(value, 0.2), 3), condition = condition)
     }
   }
-  readr::write_csv(dplyr::bind_rows(rows), path, na = "")
+    readr::write_csv(dplyr::bind_rows(rows), path, na = "")
+  }
+  if (is.null(seed)) generate() else withr::with_seed(seed, generate())
 }
 
 #' Generate deterministic local CARWatch example data
@@ -271,7 +273,7 @@ generate_synthetic_study_data <- function(output_dir, study_config = NULL, n_par
   non_compliant <- .synthetic_select(sample_keys, non_compliant_count, .synthetic_seed(random_state, 10L))
   diary <- list(); profile <- .synthetic_cortisol_profile(length(config$saliva_times), length(config$saliva_absolute_times))
   timing_seed <- .synthetic_seed(random_state)
-  if (!is.null(timing_seed)) set.seed(timing_seed)
+  timing <- function() {
   file_token <- gsub("[^A-Za-z0-9-]+", "-", config$filename_token)
   for (participant in participants) {
     folder <- fs::path(output_dir, "logs", participant); fs::dir_create(folder, recurse = TRUE)
@@ -334,5 +336,7 @@ generate_synthetic_study_data <- function(output_dir, study_config = NULL, n_par
     if (actual_non_compliant != non_compliant_count) .carwatch_abort(sprintf("Final non-compliance count differs from the deterministic target: expected %d, found %d.", non_compliant_count, actual_non_compliant), "carwatch_runtime_error")
     if (sum(samples$sampling_time_source == "manual_diary", na.rm = TRUE) != missing_count) .carwatch_abort("Manual diary patch count does not match missing raw samples.", "carwatch_runtime_error")
   }
-  output_dir
+    output_dir
+  }
+  if (is.null(timing_seed)) timing() else withr::with_seed(timing_seed, timing())
 }
