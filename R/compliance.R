@@ -4,6 +4,8 @@
 #' @param sampling_delay_tolerance_min Tolerance for later relative samples.
 #' @param absolute_time_tolerance_min Tolerance for fixed-time samples.
 #' @param check_absolute_times Whether fixed-time samples are evaluated.
+#' @return A `carwatch_compliance_checker` list containing the configured
+#'   tolerance values and the `check_absolute_times` flag.
 #' @export
 new_sampling_compliance_checker <- function(awakening_delay_tolerance_min = 5, sampling_delay_tolerance_min = 5, absolute_time_tolerance_min = 15, check_absolute_times = TRUE) {
   values <- c(awakening_delay_tolerance_min, sampling_delay_tolerance_min, absolute_time_tolerance_min)

@@ -9,6 +9,11 @@ summarize_source_audit(source_audit)
 \arguments{
 \item{source_audit}{Source audit returned by \code{read_raw_logs_from_participant_dirs()}.}
 }
+\value{
+A one-column tibble with three values named \code{raw_log_import}: the
+number of selected logs, the total raw events in selected logs, and the
+number of distinct participants, in that order.
+}
 \description{
 Compactly summarize a source audit
 }

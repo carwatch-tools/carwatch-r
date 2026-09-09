@@ -11,6 +11,10 @@ write_study_results(data, path)
 
 \item{path}{Destination CSV path.}
 }
+\value{
+\code{path}, invisibly. The function writes the canonical Study Results
+CSV and returns its absolute path.
+}
 \description{
 Write canonical CARWatch Study Results
 }

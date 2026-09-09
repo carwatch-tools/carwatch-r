@@ -20,6 +20,10 @@ new_sampling_compliance_checker(
 
 \item{check_absolute_times}{Whether fixed-time samples are evaluated.}
 }
+\value{
+A \code{carwatch_compliance_checker} list containing the configured
+tolerance values and the \code{check_absolute_times} flag.
+}
 \description{
 Configure CARWatch sampling-compliance tolerances
 }

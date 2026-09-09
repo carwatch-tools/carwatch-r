@@ -91,6 +91,8 @@ read_study_results <- function(path, tz = "Europe/Berlin", simple = FALSE) {
 #'
 #' @param data Complete `carwatch_results` object.
 #' @param path Destination CSV path.
+#' @return `path`, invisibly. The function writes the canonical Study Results
+#'   CSV and returns its absolute path.
 #' @examples
 #' fixture <- system.file("extdata", "parity", "v1.0.0", package = "carwatch")
 #' results <- read_study_results(file.path(fixture, "results.csv"))

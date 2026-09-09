@@ -238,6 +238,9 @@ read_raw_logs_from_participant_dirs <- function(participant_dirs, tz = "Europe/B
 
 #' Compactly summarize a source audit
 #' @param source_audit Source audit returned by `read_raw_logs_from_participant_dirs()`.
+#' @return A one-column tibble with three values named `raw_log_import`: the
+#'   number of selected logs, the total raw events in selected logs, and the
+#'   number of distinct participants, in that order.
 #' @export
 summarize_source_audit <- function(source_audit) {
   .require_columns(source_audit, c("participant", "status", "raw_event_count"), "Source audit")

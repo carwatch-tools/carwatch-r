@@ -9,6 +9,9 @@
 #' @param data Tibble containing `participant` and one column per result value.
 #' @param column_spec Tibble with `name`, `day`, `sample`, and `variable`.
 #' @param display_only Whether required provenance has intentionally been removed.
+#' @return A `carwatch_results` object: a tibble with one row per participant,
+#'   a `column_spec` attribute mapping value columns to day, sample, and
+#'   variable, and a `carwatch_display_only` attribute.
 #' @export
 new_carwatch_results <- function(data, column_spec, display_only = FALSE) {
   if (!inherits(data, "data.frame")) {
