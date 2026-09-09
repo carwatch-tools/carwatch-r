@@ -13,6 +13,11 @@ new_carwatch_results(data, column_spec, display_only = FALSE)
 
 \item{display_only}{Whether required provenance has intentionally been removed.}
 }
+\value{
+A \code{carwatch_results} object: a tibble with one row per participant,
+a \code{column_spec} attribute mapping value columns to day, sample, and
+variable, and a \code{carwatch_display_only} attribute.
+}
 \description{
 A \code{carwatch_results} object is an R-native representation of the Python
 package's participant-indexed, three-level wide table. Internally it is a
